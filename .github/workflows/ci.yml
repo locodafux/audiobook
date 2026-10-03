@@ -46,7 +46,6 @@ jobs:
         run: npm run bundle
 
   # Rules tests: stranger / revoked / active / column access / writes.
-  # The link function's deno tests get their own job in a later phase.
   database:
     runs-on: ubuntu-latest
     steps:
@@ -57,3 +56,17 @@ jobs:
       - run: supabase start -x edge-runtime,realtime,storage-api,imgproxy,studio,mailpit,vector,logflare,supavisor
       - run: supabase db reset
       - run: supabase test db
+
+  link-function:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/functions/download-links
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno fmt --check
+      - run: deno lint
+      - run: deno test --frozen
