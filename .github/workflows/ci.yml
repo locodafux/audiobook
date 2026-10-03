@@ -61,6 +61,12 @@ jobs:
       - name: Android JS bundle export
         run: npm run bundle
 
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/release.test.sh
+
   # Rules tests: stranger / revoked / active / column access / writes.
   database:
     runs-on: ubuntu-latest
