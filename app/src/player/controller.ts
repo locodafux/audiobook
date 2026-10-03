@@ -2,11 +2,10 @@ import type { BookRow, ChapterRow } from '../data/types';
 import { downloadedAsRows, type DownloadStore } from '../downloads/store';
 import { audioPath, timingPath } from '../downloads/types';
 import type { FileStore } from '../downloads/files';
-import type { PrefsStore } from '../prefs/prefs';
+import { clampSpeed, smartRewindS, speedFor, type SettingsStore } from '../settings/settings';
 import { createStore, type Store } from '../store';
 import type { EngineStatus, PlayerEngine } from './engine';
 import { isNearEnd, type PositionStore } from './position';
-import { smartRewindS } from './rewind';
 import { extendSleep, sleepIn, sleepRemainingS, sleepVolume, type SleepTimer } from './sleep';
 import { parseTiming, sentenceIndexAt, type Sentence } from './timing';
 
@@ -54,10 +53,14 @@ export type PlayerDeps = {
   files: FileStore;
   downloaded: DownloadStore;
   positions: PositionStore;
-  prefs: PrefsStore;
+  settings: SettingsStore;
   now?: () => number;
   /** A chapter became the current one (the place to keep the next ones downloaded). */
   onChapter?: (book: BookRow, chapters: ChapterRow[], n: number) => void;
+  /** Real seconds just listened (not scaled by speed), reported every ~10 s and on pause, for the listening stats. */
+  onListened?: (bookId: string, seconds: number) => void;
+  /** The last chapter of the book ended. */
+  onBookFinished?: (bookId: string) => void;
 };
 
 export interface PlayerController {
@@ -87,7 +90,7 @@ export interface PlayerController {
 }
 
 export function createPlayerController(deps: PlayerDeps): PlayerController {
-  const { engine, files, downloaded, positions, prefs } = deps;
+  const { engine, files, downloaded, positions, settings } = deps;
   const now = deps.now ?? Date.now;
   const state = createStore<PlayerState>(IDLE);
   const set = (patch: Partial<PlayerState>) => state.set({ ...state.get(), ...patch });
@@ -96,6 +99,8 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
   let lastSavedPos = 0;
   let finishedMarked = false;
   let volume = 1;
+  let listenedS = 0;
+  let lastTickAt: number | null = null;
   // A newer open() makes an older one stop before it touches the engine.
   let opening = 0;
 
@@ -105,6 +110,12 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
       positions.save(book.id, chapterN, position, now());
       lastSavedPos = position;
     }
+  };
+
+  const flushListened = () => {
+    const book = state.get().book;
+    if (book && listenedS >= 1) deps.onListened?.(book.id, Math.round(listenedS));
+    listenedS = 0;
   };
 
   const setVolume = (v: number) => {
@@ -124,19 +135,27 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
     positions.markFinished(book.id, chapterN);
     positions.save(book.id, chapterN, 0, now());
     const finished = chapterN;
-    const stopHere = sleep?.kind === 'chapter';
-    if (stopHere) set({ sleep: null, sleepLeftS: null });
+    if (sleep?.kind === 'chapter') set({ sleep: null, sleepLeftS: null });
+    // An end-of-chapter sleep timer, or "Play next chapter" turned off, stops at the start of the next chapter.
+    const stopHere = sleep?.kind === 'chapter' || !settings.getState().autoPlayNext;
     const next = chapterAfter(finished);
-    void (next ? api.openChapter(next.n, !stopHere) : Promise.resolve(set({ playing: false }))).then(() => {
-      // Auto-clean only after moving on, never the chapter that is playing.
-      if (prefs.state.get().autoClean && state.get().chapterN !== finished) downloaded.removeChapter(book.id, finished);
-    });
+    flushListened();
+    if (next) void api.openChapter(next.n, !stopHere);
+    else {
+      set({ playing: false });
+      deps.onBookFinished?.(book.id);
+    }
   }
 
   function onStatus(s: EngineStatus) {
     const cur = state.get();
     if (cur.load !== 'ready') return;
     const position = Math.min(s.position, s.duration || s.position);
+    if (s.playing) {
+      if (lastTickAt !== null) listenedS += Math.min(5, (now() - lastTickAt) / 1000);
+      lastTickAt = now();
+      if (listenedS >= 10) flushListened();
+    } else lastTickAt = null;
     const patch: Partial<PlayerState> = { playing: s.playing, position, duration: s.duration || cur.duration, sentenceIndex: sentenceIndexAt(cur.sentences, position) };
 
     if (cur.sleep) {
@@ -148,7 +167,7 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
         Object.assign(patch, { sleep: null, sleepLeftS: null, playing: false });
         lastActiveAt = now();
       } else {
-        setVolume(sleepVolume(left, prefs.state.get().sleepFadeOut));
+        setVolume(sleepVolume(left, true));
       }
     }
     set(patch);
@@ -168,7 +187,7 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
   async function loadChapter(book: BookRow, chapters: ChapterRow[], n: number, startAt: number, autoplay: boolean) {
     const ticket = ++opening;
     const row = chapters.find((c) => c.n === n);
-    set({ book, chapters, chapterN: n, load: 'loading', playing: false, position: startAt, duration: row?.duration_s ?? 0, sentences: [], sentenceIndex: -1, rewound: null, speed: prefs.speedFor(book.id) });
+    set({ book, chapters, chapterN: n, load: 'loading', playing: false, position: startAt, duration: row?.duration_s ?? 0, sentences: [], sentenceIndex: -1, rewound: null, speed: speedFor(settings.getState(), book.id) });
     finishedMarked = false;
     lastSavedPos = startAt;
     engine.pause();
@@ -220,7 +239,7 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
       const cur = state.get();
       if (cur.load !== 'ready' || cur.playing) return;
       if (cur.sleep?.kind === 'minutes' && now() >= cur.sleep.endsAt) set({ sleep: null, sleepLeftS: null });
-      const back = Math.min(cur.position, smartRewindS(now() - lastActiveAt, prefs.state.get().smartRewindS));
+      const back = Math.min(cur.position, smartRewindS(now() - lastActiveAt, settings.getState().smartRewindS));
       if (back > 0) {
         const to = cur.position - back;
         void engine.seekTo(to);
@@ -237,6 +256,7 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
       engine.pause();
       lastActiveAt = now();
       set({ playing: false });
+      flushListened();
       save();
     },
     toggle() {
@@ -251,8 +271,8 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
       set({ position: to, sentenceIndex: sentenceIndexAt(sentences, to), rewound: null });
     },
     skip: (seconds) => api.seekTo(state.get().position + seconds),
-    skipBack: () => api.skip(-prefs.state.get().skipBackS),
-    skipForward: () => api.skip(prefs.state.get().skipForwardS),
+    skipBack: () => api.skip(-settings.getState().skipBackS),
+    skipForward: () => api.skip(settings.getState().skipForwardS),
     seekToSentence(index) {
       const s = state.get().sentences[index];
       if (s) api.seekTo(s.s);
@@ -280,13 +300,13 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
     },
     setSpeed(speed, scope) {
       const { book } = state.get();
-      if (scope === 'book' && book) prefs.setBookSpeed(book.id, speed);
+      if (scope === 'book' && book) settings.setBookSpeed(book.id, speed);
       else {
         // "All books" changes the default and drops this book's own override so the change is heard now.
-        if (book) prefs.setBookSpeed(book.id, null);
-        prefs.update({ defaultSpeed: speed });
+        if (book) settings.setBookSpeed(book.id, null);
+        settings.update({ speed });
       }
-      const applied = book ? prefs.speedFor(book.id) : speed;
+      const applied = book ? speedFor(settings.getState(), book.id) : clampSpeed(speed);
       engine.setRate(applied);
       set({ speed: applied });
     },
@@ -303,8 +323,12 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
       const r = state.get().rewound;
       if (r) api.seekTo(r.from);
     },
-    flush: () => save(),
+    flush() {
+      flushListened();
+      save();
+    },
     close() {
+      flushListened();
       if (state.get().book) save();
       opening++;
       engine.pause();

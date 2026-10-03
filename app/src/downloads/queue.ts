@@ -1,5 +1,5 @@
 import type { KeyValueStore } from '../data/offlineList';
-import type { PrefsStore } from '../prefs/prefs';
+import type { SettingsStore } from '../settings/settings';
 import { createStore, type Store } from '../store';
 import type { FileStore } from './files';
 import { LINK_BATCH, LinksError, type ChapterLink, type LinksApi } from './links';
@@ -38,7 +38,7 @@ export type QueueDeps = {
   files: FileStore;
   links: LinksApi;
   downloaded: DownloadStore;
-  prefs: PrefsStore;
+  settings: SettingsStore;
   network: NetworkWatcher;
   now?: () => number;
   /** Pause between a failed try and the next one; tests pass an instant one. */
@@ -63,7 +63,7 @@ export interface DownloadQueue {
 const sameJob = (bookId: string, n: number) => (j: Job) => j.bookId === bookId && j.n === n;
 
 export function createDownloadQueue(deps: QueueDeps): DownloadQueue {
-  const { kv, files, links, downloaded, prefs, network } = deps;
+  const { kv, files, links, downloaded, settings, network } = deps;
   const now = deps.now ?? Date.now;
   const delay = deps.delay ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 
@@ -76,7 +76,7 @@ export function createDownloadQueue(deps: QueueDeps): DownloadQueue {
   const blockedNow = (paused = state.get().paused): Blocked => {
     if (accessEnded) return 'access_ended';
     if (paused) return 'paused';
-    const gate = downloadsAllowed(network.get(), prefs.state.get().wifiOnly);
+    const gate = downloadsAllowed(network.get(), settings.getState().wifiOnly);
     return gate === 'ok' ? null : gate;
   };
 
@@ -140,6 +140,7 @@ export function createDownloadQueue(deps: QueueDeps): DownloadQueue {
       bookId: job.bookId,
       n: job.n,
       title: job.title,
+      bookTitle: job.bookTitle,
       durationS: job.durationS,
       bytes: link.bytes,
       sentenceCount: job.sentenceCount,
@@ -210,7 +211,7 @@ export function createDownloadQueue(deps: QueueDeps): DownloadQueue {
     void pump();
   };
   network.subscribe(refresh);
-  prefs.state.subscribe(refresh);
+  settings.subscribe(refresh);
 
   const start = (jobs: Job[], paused?: boolean) => {
     update(jobs, paused);

@@ -22,6 +22,8 @@ export type QueueSnapshot = {
   items: QueueItem[];
   paused: boolean;
   online: boolean;
+  /** Why items are waiting, when not just "no connection" (e.g. Wi-Fi only). */
+  note?: string;
   /** Active item only: for "1.3 MB left · 1.1 MB/s". */
   bytesLeft?: number;
   bytesPerSecond?: number;

@@ -23,3 +23,17 @@ export function cleanUpFinished(downloaded: DownloadStore, positions: PositionSt
   }
   return freed;
 }
+
+/**
+ * "Auto-clean after N days": deletes finished chapters of books not listened to for `days` days. 0 = off.
+ * ponytail: the age is the book's last-listened time, since a finished tag has no date of its own.
+ */
+export function cleanUpOld(downloaded: DownloadStore, positions: PositionStore, days: number, now: number, keep?: { bookId: string; n: number } | null): number {
+  if (days <= 0) return 0;
+  const cutoff = now - days * 86_400_000;
+  let freed = 0;
+  for (const [bookId, p] of Object.entries(positions.state.get())) {
+    if (p.updatedAt < cutoff) freed += cleanUpFinished(downloaded, positions, bookId, keep);
+  }
+  return freed;
+}

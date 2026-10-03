@@ -1,4 +1,4 @@
-import type { PrefsStore } from '../prefs/prefs';
+import type { SettingsStore } from '../settings/settings';
 import type { DownloadQueue, NewJob } from './queue';
 import type { DownloadStore } from './store';
 
@@ -29,7 +29,7 @@ export function chaptersToKeep(args: {
 
 /** Queues the next chapters for `book` after `currentN`, as set in Settings (does nothing when Keep next is 0). */
 export function keepNextChapters(
-  d: { queue: Pick<DownloadQueue, 'enqueue' | 'isQueued'>; downloaded: Pick<DownloadStore, 'has'>; prefs: PrefsStore },
+  d: { queue: Pick<DownloadQueue, 'enqueue' | 'isQueued'>; downloaded: Pick<DownloadStore, 'has'>; settings: Pick<SettingsStore, 'getState'> },
   book: { id: string; title: string },
   chapters: readonly Known[],
   currentN: number,
@@ -40,9 +40,20 @@ export function keepNextChapters(
       bookTitle: book.title,
       chapters,
       currentN,
-      keepNext: d.prefs.state.get().keepNext,
+      keepNext: d.settings.getState().keepNextN,
       have: (n) => d.downloaded.has(book.id, n),
       queued: (n) => d.queue.isQueued(book.id, n),
     }),
   );
 }
+
+/** A queue job for one chapter row of a book. */
+export const toJob = (book: { id: string; title: string }, c: Known): NewJob => ({
+  bookId: book.id,
+  bookTitle: book.title,
+  n: c.n,
+  title: c.title,
+  bytes: c.bytes,
+  durationS: c.duration_s,
+  sentenceCount: c.sentence_count,
+});

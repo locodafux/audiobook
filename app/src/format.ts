@@ -21,3 +21,15 @@ export function timeAgo(from: number, now: number): string {
   if (hours < 48) return `${hours} hours ago`;
   return `${Math.round(hours / 24)} days ago`;
 }
+
+/** "4:07" or "1:02:03" for a position in seconds. */
+export function formatClock(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+}
+
+/** 1.25 -> "1.25×", 1 -> "1×". */
+export const formatSpeed = (speed: number): string => `${Number(speed.toFixed(2))}×`;

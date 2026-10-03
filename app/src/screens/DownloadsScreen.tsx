@@ -82,7 +82,7 @@ function QueueTab({ downloads }: { downloads: DownloadsPort }) {
 
   return (
     <>
-      {!q.online ? <OfflinePill>No connection · will resume automatically</OfflinePill> : null}
+      {!q.online ? <OfflinePill>{q.note ?? 'No connection · will resume automatically'}</OfflinePill> : null}
       <View style={styles.head}>
         <Text style={styles.headTitle}>
           {q.paused ? 'Downloads paused' : !q.online ? 'Waiting for connection' : active ? `Downloading chapter ${active.chapterN}` : 'Starting…'}

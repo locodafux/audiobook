@@ -1,4 +1,4 @@
-import { createPrefsStore } from '../prefs/prefs';
+import { createSettingsStore } from '../settings/settings';
 import { chaptersToKeep } from './autoDownload';
 import { fakeFiles, fakeLinks, fakeNetwork, memoryKv, type Remote } from './fakes';
 import { LinksError, parseLinks } from './links';
@@ -24,10 +24,10 @@ function setup(chapterCount = 12, opts: { net?: { connected: boolean; wifi: bool
   const files = fakeFiles(remote);
   const links = fakeLinks(specs);
   const network = fakeNetwork(opts.net);
-  const prefs = createPrefsStore(memoryKv());
+  const settings = createSettingsStore(memoryKv());
   const downloaded = createDownloadStore(kv, files);
-  const queue = createDownloadQueue({ kv, files, links, downloaded, prefs, network, delay: async () => {} });
-  return { kv, files, links, network, prefs, downloaded, queue, remote };
+  const queue = createDownloadQueue({ kv, files, links, downloaded, settings, network, delay: async () => {} });
+  return { kv, files, links, network, settings, downloaded, queue, remote };
 }
 
 describe('download queue', () => {
@@ -55,7 +55,7 @@ describe('download queue', () => {
     let clock = 0;
     const t = setup(3);
     const links = fakeLinks({ 1: { bytes: 1000, sha: 'sha1' }, 2: { bytes: 1000, sha: 'sha2' } }, () => clock);
-    const queue = createDownloadQueue({ kv: t.kv, files: t.files, links, downloaded: t.downloaded, prefs: t.prefs, network: t.network, now: () => clock, delay: async () => {} });
+    const queue = createDownloadQueue({ kv: t.kv, files: t.files, links, downloaded: t.downloaded, settings: t.settings, network: t.network, now: () => clock, delay: async () => {} });
     let release!: () => void;
     t.files.gate = new Promise<void>((r) => (release = () => r())); // hold chapter 1 mid-download
     queue.enqueue([job(1), job(2)]);
@@ -107,7 +107,7 @@ describe('download queue', () => {
     const t = setup(12, { net: { connected: true, wifi: false } });
     t.queue.enqueue([job(1)]);
     await settle();
-    t.prefs.update({ wifiOnly: false });
+    t.settings.update({ wifiOnly: false });
     await settle();
     expect(t.downloaded.has(BOOK, 1)).toBe(true);
   });

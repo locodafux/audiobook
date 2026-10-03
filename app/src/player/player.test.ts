@@ -1,13 +1,12 @@
 import { fixtureBooks, makeChapter } from '../data/fixtures';
 import { fakeFiles, memoryKv } from '../downloads/fakes';
-import { cleanUpFinished } from '../downloads/cleanup';
+import { cleanUpFinished, cleanUpOld } from '../downloads/cleanup';
 import { createDownloadStore } from '../downloads/store';
 import { audioPath, timingPath } from '../downloads/types';
-import { createPrefsStore, DEFAULT_PREFS } from '../prefs/prefs';
+import { createSettingsStore, DEFAULT_SETTINGS, smartRewindS, speedFor } from '../settings/settings';
 import { createPlayerController } from './controller';
 import { fakeEngine } from './fakeEngine';
 import { createPositionStore, FINISHED_WITHIN_S, POSITIONS_KEY } from './position';
-import { smartRewindS } from './rewind';
 import { extendSleep, sleepIn, sleepRemainingS, sleepVolume } from './sleep';
 import { parseTiming, sentenceIndexAt } from './timing';
 
@@ -24,14 +23,16 @@ function setup(opts: { have?: number[]; clock?: { t: number }; kv?: ReturnType<t
   for (const n of opts.have ?? [1, 2, 3]) {
     files.disk.set(audioPath(book.id, n), { bytes: 3_000_000, sha: 'x' });
     files.disk.set(timingPath(book.id, n), { bytes: 1, sha: '', text: timingJson });
-    downloaded.add({ bookId: book.id, n, title: `Chapter ${n}`, durationS: 600 + n, bytes: 3_000_000, sentenceCount: 20, audioSha256: 'x', downloadedAt: 0 });
+    downloaded.add({ bookId: book.id, n, title: `Chapter ${n}`, bookTitle: book.title, durationS: 600 + n, bytes: 3_000_000, sentenceCount: 20, audioSha256: 'x', downloadedAt: 0 });
   }
-  const prefs = createPrefsStore(memoryKv());
+  const settings = createSettingsStore(memoryKv());
   const positions = createPositionStore(kv);
   const engine = fakeEngine(60);
   const onChapter = jest.fn();
-  const player = createPlayerController({ engine, files, downloaded, positions, prefs, now: () => clock.t, onChapter });
-  return { clock, kv, files, downloaded, prefs, positions, engine, player, onChapter };
+  const onListened = jest.fn();
+  const onBookFinished = jest.fn();
+  const player = createPlayerController({ engine, files, downloaded, positions, settings, now: () => clock.t, onChapter, onListened, onBookFinished });
+  return { clock, kv, files, downloaded, settings, positions, engine, player, onChapter, onListened, onBookFinished };
 }
 
 describe('timing file', () => {
@@ -69,8 +70,9 @@ describe('sleep timer and smart rewind rules', () => {
     expect(extendSleep({ kind: 'chapter' }, 0)).toEqual({ kind: 'minutes', endsAt: 600_000 });
   });
   it('rewinds more the longer the pause, and not at all when off', () => {
-    expect(smartRewindS(30_000, 10)).toBe(0);
-    expect(smartRewindS(5 * 60_000, 10)).toBe(5);
+    expect(smartRewindS(20_000, 10)).toBe(0);
+    expect(smartRewindS(60_000, 10)).toBe(3);
+    expect(smartRewindS(10 * 60_000, 10)).toBe(7);
     expect(smartRewindS(3_600_000, 10)).toBe(10);
     expect(smartRewindS(3_600_000, 0)).toBe(0);
   });
@@ -79,7 +81,7 @@ describe('sleep timer and smart rewind rules', () => {
 describe('player', () => {
   it('plays a downloaded chapter at the book speed and follows the voice', async () => {
     const t = setup();
-    t.prefs.update({ defaultSpeed: 1.25 });
+    t.settings.update({ speed: 1.25 });
     await t.player.open(book, chapters, 1, true);
     const s = t.player.state.get();
     expect(s).toMatchObject({ load: 'ready', playing: true, chapterN: 1, speed: 1.25 });
@@ -117,7 +119,7 @@ describe('player', () => {
     expect(t.player.state.get().position).toBe(30);
     t.player.skipBack();
     expect(t.player.state.get().position).toBe(15);
-    t.prefs.update({ skipBackS: 30, skipForwardS: 45 });
+    t.settings.update({ skipBackS: 30, skipForwardS: 45 });
     t.player.skipForward();
     t.player.skipForward();
     expect(t.player.state.get().position).toBe(60); // chapter is 60 s long
@@ -224,12 +226,12 @@ describe('player', () => {
     const t = setup();
     await t.player.open(book, chapters, 1);
     t.player.setSpeed(1.5, 'book');
-    expect(t.prefs.speedFor(book.id)).toBe(1.5);
-    expect(t.prefs.speedFor('other')).toBe(DEFAULT_PREFS.defaultSpeed);
+    expect(speedFor(t.settings.getState(), book.id)).toBe(1.5);
+    expect(speedFor(t.settings.getState(), 'other')).toBe(DEFAULT_SETTINGS.speed);
     expect(t.engine.rate).toBe(1.5);
     t.player.setSpeed(1.75, 'all');
-    expect(t.prefs.speedFor(book.id)).toBe(1.75);
-    expect(t.prefs.state.get().bookSpeed).toEqual({});
+    expect(speedFor(t.settings.getState(), book.id)).toBe(1.75);
+    expect(t.settings.getState().bookSpeeds).toEqual({});
     t.player.setSpeed(9, 'all'); // clamped to 3x
     expect(t.engine.rate).toBe(3);
   });
@@ -270,15 +272,36 @@ describe('player', () => {
     expect(t.player.state.get().sleep).toEqual({ kind: 'minutes', endsAt: t.clock.t + 11 * 60_000 });
   });
 
-  it('auto-clean deletes a finished chapter once playback has moved on', async () => {
+  it('stops at the start of the next chapter when "Play next chapter" is off', async () => {
     const t = setup();
-    t.prefs.update({ autoClean: true });
+    t.settings.update({ autoPlayNext: false });
     await t.player.open(book, chapters, 1, true);
     t.engine.position = 60;
     t.engine.emit({ ended: true });
-    await new Promise<void>((r) => setImmediate(() => r()));
-    expect(t.downloaded.has(book.id, 1)).toBe(false);
-    expect(t.downloaded.has(book.id, 2)).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(t.player.state.get()).toMatchObject({ chapterN: 2, playing: false });
+  });
+
+  it('reports real listening time every 10 s and on pause, and the end of the book', async () => {
+    const t = setup();
+    await t.player.open(book, chapters, 1, true);
+    t.engine.playing = true;
+    for (let i = 0; i < 12; i++) {
+      t.clock.t += 1000;
+      t.engine.tick(0.5); // listening time is wall-clock, not audio time
+    }
+    expect(t.onListened).toHaveBeenCalledWith(book.id, 10);
+    t.clock.t += 3000;
+    t.engine.tick(0.5);
+    t.player.pause();
+    expect(t.onListened).toHaveBeenLastCalledWith(book.id, 4);
+
+    const last = setup({ have: [4] });
+    await last.player.open(book, chapters, 4, true);
+    last.engine.position = 60;
+    last.engine.emit({ ended: true });
+    expect(last.onBookFinished).toHaveBeenCalledWith(book.id);
   });
 });
 
@@ -291,6 +314,20 @@ describe('storage clean-up', () => {
     expect(freed).toBe(3_000_000);
     expect(t.downloaded.forBook(book.id).map((c) => c.n)).toEqual([2, 3]);
     expect(t.positions.isFinished(book.id, 1)).toBe(true);
+  });
+});
+
+describe('auto-clean after N days', () => {
+  it('removes finished chapters of books left alone for that long, and nothing when off', () => {
+    const t = setup();
+    t.positions.save(book.id, 2, 10, 1_000_000);
+    t.positions.markFinished(book.id, 1);
+    const day = 86_400_000;
+    expect(cleanUpOld(t.downloaded, t.positions, 0, 1_000_000 + 30 * day)).toBe(0);
+    expect(cleanUpOld(t.downloaded, t.positions, 7, 1_000_000 + 3 * day)).toBe(0);
+    expect(cleanUpOld(t.downloaded, t.positions, 7, 1_000_000 + 8 * day)).toBe(3_000_000);
+    expect(t.downloaded.has(book.id, 1)).toBe(false);
+    expect(t.downloaded.has(book.id, 2)).toBe(true);
   });
 });
 

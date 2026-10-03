@@ -1,19 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 
 import type { LibraryApi } from './data/library';
-import type { BookRow } from './data/types';
+import type { BookRow, ChapterRow } from './data/types';
 import { useBookList } from './data/useBookList';
 import { BookScreen } from './screens/BookScreen';
 import { BrowseScreen } from './screens/BrowseScreen';
+import { downloadedAsRows } from './downloads/store';
 import { DownloadsScreen } from './screens/DownloadsScreen';
 import { HomeScreen } from './screens/HomeScreen';
+import { PlayerScreen } from './screens/PlayerScreen';
 import { YouFlow } from './screens/YouFlow';
 import { loadProfile, type Profile, type ProfileApi } from './profile/profile';
 import { stubPorts, type PhonePorts } from './storage/ports';
 import type { Bookmark } from './bookmarks/bookmarks';
+import { useServices } from './servicesContext';
 import { colors } from './theme';
+import { MiniPlayer } from './ui/MiniPlayer';
 import { TabBar, type TabKey } from './ui/TabBar';
 
 /**
@@ -25,16 +29,16 @@ export function Shell({
   email,
   library,
   profileApi,
-  ports = stubPorts,
-  onJumpToBookmark = () => {},
+  ports: portsProp,
+  onJumpToBookmark,
   onSignOut,
 }: {
   email: string;
   library: LibraryApi;
   profileApi: ProfileApi;
-  /** The download queue and file storage (phase 5). Until it is wired in, the stub shows empty states. */
+  /** The download queue and file storage. Defaults to the real ones from the services, else the stub's empty states. */
   ports?: PhonePorts;
-  /** Opens the player at a bookmark (phase 5). */
+  /** Opens the player at a bookmark. Defaults to the real player. */
   onJumpToBookmark?: (bookmark: Bookmark) => void;
   onSignOut: () => void;
 }) {
@@ -48,14 +52,47 @@ export function Shell({
   }, [profileApi]);
   const [tab, setTab] = useState<TabKey>('home');
   const [open, setOpen] = useState<BookRow | null>(null);
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const services = useServices();
+  const ports = portsProp ?? services?.ports ?? stubPorts;
   const books = useBookList(library);
   const list = books.state.status === 'ready' ? books.state.list.books : null;
 
   useEffect(() => {
-    if (!open) return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => (setOpen(null), true));
+    if (!open && !playerOpen) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => (playerOpen ? setPlayerOpen(false) : setOpen(null), true));
     return () => sub.remove();
-  }, [open]);
+  }, [open, playerOpen]);
+
+  // Chapters from the library, or, offline, the ones on the phone.
+  const rowsFor = useCallback(
+    async (book: BookRow): Promise<ChapterRow[]> => {
+      const rows = await library.listChapters(book.id).catch(() => null);
+      return rows ?? (services ? downloadedAsRows(services.downloaded, book.id) : []);
+    },
+    [library, services],
+  );
+  const play = useCallback(
+    async (book: BookRow, rows: ChapterRow[], n?: number, at?: number) => {
+      if (!services) return;
+      setPlayerOpen(true);
+      await services.player.open(book, rows, n, at === undefined);
+      if (at !== undefined) {
+        services.player.seekTo(at);
+        services.player.play();
+      }
+    },
+    [services],
+  );
+  const jump = useMemo(
+    () =>
+      onJumpToBookmark ??
+      ((b: Bookmark) => {
+        const book = list?.find((x) => x.id === b.bookId);
+        if (book) void rowsFor(book).then((rows) => play(book, rows, b.chapterN, b.positionS));
+      }),
+    [onJumpToBookmark, list, rowsFor, play],
+  );
 
   const volumes = useMemo(
     () =>
@@ -69,7 +106,7 @@ export function Shell({
     <View style={styles.root}>
       <View style={styles.content}>
         {open ? (
-          <BookScreen book={open} volumes={volumes} library={library} onSelectVolume={setOpen} onBack={() => setOpen(null)} onJump={onJumpToBookmark} />
+          <BookScreen book={open} volumes={volumes} library={library} onSelectVolume={setOpen} onBack={() => setOpen(null)} onJump={jump} onPlay={services ? (rows, n) => void play(open, rows, n) : undefined} />
         ) : tab === 'home' ? (
           <HomeScreen email={email} books={books} onOpen={setOpen} />
         ) : tab === 'browse' ? (
@@ -80,6 +117,7 @@ export function Shell({
           <YouFlow email={email} profile={profile} books={list ?? []} storage={ports.storage} onSignOut={onSignOut} />
         )}
       </View>
+      {playerOpen ? null : <MiniPlayer onOpen={() => setPlayerOpen(true)} />}
       <TabBar
         active={tab}
         onChange={(t) => {
@@ -87,6 +125,11 @@ export function Shell({
           setTab(t);
         }}
       />
+      {playerOpen ? (
+        <View style={StyleSheet.absoluteFill}>
+          <PlayerScreen onClose={() => setPlayerOpen(false)} />
+        </View>
+      ) : null}
     </View>
   );
 }

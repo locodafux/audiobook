@@ -1,12 +1,16 @@
 import { Feather } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Bookmark } from '../bookmarks/bookmarks';
 import type { LibraryApi } from '../data/library';
 import type { BookRow, ChapterRow } from '../data/types';
-import { formatDuration, plural } from '../format';
+import { toJob } from '../downloads/autoDownload';
+import { downloadedAsRows } from '../downloads/store';
+import { formatBytes, formatDuration, plural } from '../format';
+import { useServices, type Services } from '../servicesContext';
+import { useStore } from '../store';
 import { colors, fonts } from '../theme';
 import { Cover } from '../ui/Cover';
 import { Button, EmptyState } from '../ui/kit';
@@ -15,7 +19,7 @@ import { BookmarksTab } from './BookmarksTab';
 
 type Chapters = { status: 'loading' } | { status: 'error' } | { status: 'ready'; rows: ChapterRow[] };
 
-/** Book page: cover, facts, volume switcher for a series, and the chapter list. Downloads and playback come later. */
+/** Book page: cover, facts, volume switcher for a series, and the chapter list. */
 export function BookScreen({
   book,
   volumes,
@@ -23,6 +27,7 @@ export function BookScreen({
   onSelectVolume,
   onBack,
   onJump = () => {},
+  onPlay,
 }: {
   book: BookRow;
   volumes: BookRow[];
@@ -31,7 +36,10 @@ export function BookScreen({
   onBack: () => void;
   /** Opens the player at a bookmark (the player owns playback). */
   onJump?: (bookmark: Bookmark) => void;
+  /** Opens the player on this book (at chapter `n`, or at the saved place). Only with the player wired in. */
+  onPlay?: (rows: ChapterRow[], n?: number) => void;
 }) {
+  const services = useServices();
   const [tab, setTab] = useState<'chapters' | 'bookmarks'>('chapters');
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ key: string; rows: ChapterRow[] | null } | null>(null);
@@ -49,8 +57,9 @@ export function BookScreen({
   }, [library, book.id, key]);
 
   // A result for another book (or an earlier attempt) counts as still loading.
+  const offline = services && result?.key === key && !result.rows ? downloadedAsRows(services.downloaded, book.id) : [];
   const chapters: Chapters =
-    result?.key !== key ? { status: 'loading' } : result.rows ? { status: 'ready', rows: result.rows } : { status: 'error' };
+    result?.key !== key ? { status: 'loading' } : result.rows ? { status: 'ready', rows: result.rows } : offline.length ? { status: 'ready', rows: offline } : { status: 'error' };
   const load = () => setAttempt((n) => n + 1);
 
   const header = (
@@ -82,6 +91,7 @@ export function BookScreen({
         </View>
       ) : null}
       {book.description ? <Text style={styles.about}>{book.description}</Text> : null}
+      {services && onPlay && chapters.status === 'ready' ? <Actions services={services} book={book} rows={chapters.rows} onPlay={onPlay} /> : null}
       <View style={{ marginHorizontal: 20, marginTop: 20, marginBottom: 6 }}>
         <Segmented value={tab} options={['chapters', 'bookmarks'] as const} label={(t) => (t === 'chapters' ? 'Chapters' : 'Bookmarks')} onChange={setTab} />
       </View>
@@ -102,7 +112,13 @@ export function BookScreen({
           ListHeaderComponent={header}
           contentContainerStyle={{ paddingBottom: 24 }}
           renderItem={({ item }) => (
-            <View style={styles.chapter}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Chapter ${item.n}, ${item.title}`}
+              disabled={!services || !onPlay}
+              onPress={() => onPlay?.(chapters.status === 'ready' ? chapters.rows : [], item.n)}
+              style={styles.chapter}
+            >
               <Text style={styles.num}>{item.n}</Text>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text numberOfLines={2} style={styles.chTitle}>
@@ -110,7 +126,8 @@ export function BookScreen({
                 </Text>
                 <Text style={styles.chMeta}>{formatDuration(item.duration_s) || '< 1m'}</Text>
               </View>
-            </View>
+              {services ? <ChapterState services={services} book={book} row={item} /> : null}
+            </Pressable>
           )}
           ListEmptyComponent={
             chapters.status === 'loading' ? (
@@ -131,6 +148,43 @@ export function BookScreen({
       )}
     </SafeAreaView>
   );
+}
+
+/** Play / Continue and Download all. */
+function Actions({ services, book, rows, onPlay }: { services: Services; book: BookRow; rows: ChapterRow[]; onPlay: (rows: ChapterRow[], n?: number) => void }) {
+  const { downloaded, queue, positions } = services;
+  useStore(downloaded.state);
+  useStore(queue.state);
+  const saved = useStore(positions.state)[book.id];
+  const missing = rows.filter((c) => !downloaded.has(book.id, c.n) && !queue.isQueued(book.id, c.n));
+  const bytes = missing.reduce((sum, c) => sum + c.bytes, 0);
+  const downloadAll = () =>
+    Alert.alert(`Download ${plural(missing.length, 'chapter')}?`, `${formatBytes(bytes)} will be saved on this phone.`, [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Download', onPress: () => queue.enqueue(missing.map((c) => toJob(book, c))) },
+    ]);
+  return (
+    <View style={styles.actions}>
+      <View style={{ flex: 1 }}>
+        <Button label={saved ? 'Continue' : 'Play'} icon="play" onPress={() => onPlay(rows)} />
+      </View>
+      {missing.length ? (
+        <View style={{ flex: 1 }}>
+          <Button label="Download all" variant="ghost" icon="download" onPress={downloadAll} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** Per-chapter download state: on the phone, coming (with %), failed, or a download button. */
+function ChapterState({ services: { downloaded, queue }, book, row }: { services: Services; book: BookRow; row: ChapterRow }) {
+  const job = useStore(queue.state).jobs.find((j) => j.bookId === book.id && j.n === row.n);
+  useStore(downloaded.state);
+  if (downloaded.has(book.id, row.n)) return <Feather accessibilityLabel="On this phone" name="check-circle" size={18} color={colors.accent} />;
+  if (job?.status === 'failed') return <Feather accessibilityLabel="Download failed, tap to retry" name="alert-circle" size={18} color={colors.danger} onPress={() => queue.retry(book.id, row.n)} />;
+  if (job) return <Text style={styles.chMeta}>{job.status === 'downloading' ? `${Math.round(job.progress * 100)}%` : 'Waiting'}</Text>;
+  return <Feather accessibilityLabel="Download" name="download" size={18} color={colors.muted} onPress={() => queue.enqueue([toJob(book, row)])} />;
 }
 
 const Stat = ({ value, label }: { value: string; label: string }) => (
@@ -155,6 +209,7 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.text },
   chipText: { fontFamily: fonts.sansBold, fontSize: 11.5, color: colors.muted },
   about: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 20, color: colors.muted, marginHorizontal: 20, marginTop: 14 },
+  actions: { flexDirection: 'row', gap: 10, marginHorizontal: 20, marginTop: 16 },
   chapter: { flexDirection: 'row', gap: 14, paddingVertical: 10, paddingHorizontal: 20, alignItems: 'center' },
   num: { width: 28, fontFamily: fonts.sansBold, fontSize: 13, color: colors.subtle },
   chTitle: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },

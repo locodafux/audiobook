@@ -24,6 +24,8 @@ export interface PositionStore {
   save(bookId: string, chapter: number, positionS: number, now: number): void;
   markFinished(bookId: string, chapter: number): void;
   isFinished(bookId: string, chapter: number): boolean;
+  /** Forgets every place and finished tag ("Clear data"). */
+  clear(): void;
   /** The book listened to most recently, for the Continue card. */
   latest(): { bookId: string; position: BookPosition } | undefined;
 }
@@ -62,6 +64,7 @@ export function createPositionStore(kv: KeyValueStore): PositionStore {
       if (cur?.finished.includes(chapter)) return;
       commit({ ...state.get(), [bookId]: { chapter, positionS: 0, updatedAt: Date.now(), ...cur, finished: [...(cur?.finished ?? []), chapter] } });
     },
+    clear: () => commit({}),
     isFinished: (bookId, chapter) => !!get(bookId)?.finished.includes(chapter),
     latest() {
       let best: { bookId: string; position: BookPosition } | undefined;

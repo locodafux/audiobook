@@ -3,6 +3,7 @@ export type DownloadedChapter = {
   bookId: string;
   n: number;
   title: string;
+  bookTitle: string;
   durationS: number;
   bytes: number;
   sentenceCount: number;
