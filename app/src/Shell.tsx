@@ -19,6 +19,7 @@ import { useServices } from './servicesContext';
 import { colors } from './theme';
 import { MiniPlayer } from './ui/MiniPlayer';
 import { TabBar, type TabKey } from './ui/TabBar';
+import { UpdateBanner } from './update/UpdateBanner';
 
 /**
  * The signed-in app: four tabs and a book page on top.
@@ -104,6 +105,7 @@ export function Shell({
 
   return (
     <View style={styles.root}>
+      <UpdateBanner />
       <View style={styles.content}>
         {open ? (
           <BookScreen book={open} volumes={volumes} library={library} onSelectVolume={setOpen} onBack={() => setOpen(null)} onJump={jump} onPlay={services ? (rows, n) => void play(open, rows, n) : undefined} />
