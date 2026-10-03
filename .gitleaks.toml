@@ -1,0 +1,8 @@
+title = "audiobook gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Throw-away values used by local Supabase and CI only"
+paths = ['''(^|/)\.env\.example$''']

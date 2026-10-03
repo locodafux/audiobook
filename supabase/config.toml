@@ -1,0 +1,84 @@
+# Hearthread Supabase config. No secrets: SMTP credentials come from env names only.
+# `supabase start` uses this for the local stack; `supabase config push` applies the [auth] part to the hosted project.
+project_id = "hearthread"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+
+# Local only: emails sent by the local stack land here (http://127.0.0.1:54324), nothing is delivered.
+[local_smtp]
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+# Not an https site: the app is opened by its own scheme.
+site_url = "hearthread://auth"
+additional_redirect_urls = ["hearthread://auth"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# Invite-only: nobody can create an account by asking for a code. Only the admin key can create users.
+enable_signup = false
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+
+[auth.rate_limit]
+# Custom SMTP starts at 30/hour on the hosted service; raise it there if needed.
+email_sent = 30
+sign_in_sign_ups = 30
+token_verifications = 30
+
+[auth.email]
+# Same switch as above for the email provider: unknown addresses get an error, no mail is sent.
+enable_signup = false
+enable_confirmations = false
+double_confirm_changes = true
+max_frequency = "1s"
+# 6-digit code, valid 15 minutes.
+otp_length = 6
+otp_expiry = 900
+
+# Real sender (Gmail app password). Uncomment before `supabase config push`; the local stack
+# keeps using the built-in test inbox above. Values are read from the environment, never committed:
+#   SUPABASE_SMTP_USER, SUPABASE_SMTP_PASS, SUPABASE_SMTP_FROM
+# [auth.email.smtp]
+# enabled = true
+# host = "smtp.gmail.com"
+# port = 465
+# user = "env(SUPABASE_SMTP_USER)"
+# pass = "env(SUPABASE_SMTP_PASS)"
+# admin_email = "env(SUPABASE_SMTP_FROM)"
+# sender_name = "Hearthread"
+
+# Existing members asking for a sign-in get one email with a link and a code.
+[auth.email.template.magic_link]
+subject = "Your Hearthread sign-in"
+content_path = "./supabase/email-template.html"
+
+[auth.sms]
+enable_signup = false
+
+[auth.mfa.totp]
+enroll_enabled = false
+verify_enabled = false
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
