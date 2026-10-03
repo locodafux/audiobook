@@ -1,9 +1,9 @@
 name: ci
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
 
 permissions:
   contents: read
@@ -44,3 +44,16 @@ jobs:
       - run: npm test
       - name: Android JS bundle export
         run: npm run bundle
+
+  # Rules tests: stranger / revoked / active / column access / writes.
+  # The link function's deno tests get their own job in a later phase.
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start -x edge-runtime,realtime,storage-api,imgproxy,studio,mailpit,vector,logflare,supavisor
+      - run: supabase db reset
+      - run: supabase test db
