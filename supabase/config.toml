@@ -46,8 +46,9 @@ sign_in_sign_ups = 30
 token_verifications = 30
 
 [auth.email]
-# Same switch as above for the email provider: unknown addresses get an error, no mail is sent.
-enable_signup = false
+# This switch turns the email PROVIDER on (false would disable email login entirely).
+# Invite-only comes from `[auth] enable_signup = false` above, not from this line.
+enable_signup = true
 enable_confirmations = false
 double_confirm_changes = true
 max_frequency = "1s"

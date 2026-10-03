@@ -38,7 +38,7 @@ Values: `SUPABASE_URL`, `SUPABASE_ANON_KEY` (app), `SUPABASE_SERVICE_KEY`, `SUPA
    address, password = the app password, sender = the same address, name `Hearthread`.
    (Local dev reads these from `SUPABASE_SMTP_USER` / `SUPABASE_SMTP_PASS` / `SUPABASE_SMTP_FROM`; names only here.)
 4. Authentication → Rate limits: raise "emails per hour" above the 30 that custom SMTP starts with if needed.
-5. Authentication → Sign In / Providers: **disable "Allow new users to sign up"**; paste the template from
+5. Authentication → Sign In / Providers: keep the **Email** provider enabled but turn **"Allow new users to sign up" off** (this is what makes sign-in invite-only; turning the Email provider itself off breaks all email login); paste the template from
    `supabase/email-template.html` into the Magic Link template (config.toml does this for local only).
 
 ## 5. Redirect URL
@@ -53,6 +53,6 @@ Values: `SUPABASE_URL`, `SUPABASE_ANON_KEY` (app), `SUPABASE_SERVICE_KEY`, `SUPA
 | 3 | R2 free allowance | **Verified from docs** | Cloudflare R2 pricing: 10 GB-month storage, 1 M Class A and 10 M Class B ops/month, egress free (Standard storage only). |
 | 4 | Does R2 need a payment card | **Mostly verified, confirm live** | Docs are silent; Cloudflare community threads and third-party guides report a card/PayPal is required to enable R2 even for the free tier, with no charge inside the allowance. Only the live signup settles it. |
 | 5 | Free slots on the second Supabase account | **Needs the live account** | The CLI login here only sees the first account. Check the dashboard before creating the project. |
-| 6 | Stranger sign-in error code | **Verified locally in phase 1** (see `supabase/tests/README.md`) | Run against the local stack with sign-ups disabled; the hosted service uses the same Auth server, but confirm once against the real project. |
+| 6 | Stranger sign-in error code | **Verified on the local stack** (`scripts/auth-smoke.sh`); confirm once on the hosted project | With sign-ups disabled, asking for a code for an uninvited address returns HTTP 422 `error_code: "signup_disabled"` (or `otp_disabled` if the app sends `create_user: false`); no email is sent. The app maps both to "not on the invite list". The hosted project runs the same Auth server, but only a live call settles it. |
 | 7 | Gmail app password works for SMTP at friend volume | **Needs the live account** | Provider limits not verified; a mail to your own address in phase 1 confirms delivery. |
 | 8 | Free project inactivity pause period | **Needs the live account / dashboard** | Not stated on the pages read. The 3-day keep-alive is designed to be well inside any plausible window. |

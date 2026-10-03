@@ -36,6 +36,7 @@ colima start
 supabase start
 supabase db reset     # applies supabase/migrations from scratch
 supabase test db      # runs supabase/tests (pgTAP)
+scripts/auth-smoke.sh # local sign-in check: stranger refused, code signs in, revoked loses access
 ```
 
 ## Secrets
