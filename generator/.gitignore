@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+# real settings live only on the Mac; commit .env.example only
+.env
+.env.dev
+.env.prod
+# site-specific filter rules (kept off the public repo)
+local-rules*

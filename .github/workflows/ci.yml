@@ -11,16 +11,32 @@ permissions:
 jobs:
   generator:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: generator
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv sync
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run pytest
+      - uses: astral-sh/setup-uv@v6
+      - name: Install Python deps
+        working-directory: generator
+        run: uv sync --locked
+      - name: ffmpeg (join and length-check tests)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Lint
+        working-directory: generator
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      # Queue/pipeline/invite tests need the local Supabase database; they skip without it.
+      # Start it once the scaffold's migrations are in the repo.
+      - name: Start local Supabase
+        if: hashFiles('supabase/migrations/*.sql') != ''
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Apply migrations (database only; same services as the database job)
+        if: hashFiles('supabase/migrations/*.sql') != ''
+        run: supabase start -x edge-runtime,realtime,storage-api,imgproxy,studio,mailpit,vector,logflare,supavisor
+      - name: Test
+        working-directory: generator
+        run: uv run pytest -q -rs
 
   app:
     runs-on: ubuntu-latest
