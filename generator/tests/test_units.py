@@ -228,3 +228,28 @@ def test_telegram_refuses_over_50mb(tmp_path, monkeypatch):
     with pytest.raises(TelegramError) as e:
         asyncio.run(_tg(lambda r: httpx.Response(200), []).send_document(f, "c"))
     assert e.value.permanent
+
+
+def test_default_parser_adapts_the_real_epub_reader(monkeypatch, tmp_path):
+    from hearthread import epub
+    from hearthread.book import default_parser
+
+    real = epub.Book(
+        title="T", author=None, description=None, language="en", series="S", volume=2,
+        cover=b"jpg",
+        chapters=(
+            epub.Chapter(1, "One", ("a.", "b."), "x.xhtml#c1", "h1"),
+            epub.Chapter(2, "Two", (), "x.xhtml#c2", "h2", error="boom"),
+        ),
+    )  # fmt: skip
+    monkeypatch.setattr(epub, "parse", lambda path: real)
+    b = default_parser(tmp_path / "x.epub")
+    assert (b.title, b.author, b.series_title, b.volume, b.parser_version) == (
+        "T",
+        "",
+        "S",
+        2,
+        epub.PARSER_VERSION,
+    )
+    assert b.chapters[0].sentences == ["a.", "b."] and b.chapters[0].source_ref == "x.xhtml#c1"
+    assert b.chapters[1].error == "boom"
