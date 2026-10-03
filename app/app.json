@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Hearthread",
+    "slug": "hearthread",
+    "version": "0.1.0",
+    "scheme": "hearthread",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "platforms": ["android"],
+    "android": {
+      "package": "com.locodafux.hearthread",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0E1116",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": ["expo-secure-store", "expo-font"]
+  }
+}
