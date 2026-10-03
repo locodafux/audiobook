@@ -1,5 +1,9 @@
 // "Dusk" design system from the approved wireframes: dark, Jade accent.
-export const colors = {
+export type Palette = {
+  [K in 'bg' | 'surf' | 'surf2' | 'raised' | 'text' | 'muted' | 'subtle' | 'line' | 'accent' | 'onAccent' | 'tint' | 'warn' | 'warnBg' | 'danger' | 'dangerBg']: string;
+};
+
+const dark: Palette = {
   bg: '#0e1116',
   surf: '#171b22',
   surf2: '#20252e',
@@ -15,7 +19,68 @@ export const colors = {
   warnBg: 'rgba(255,180,84,0.14)',
   danger: '#ff7a7a',
   dangerBg: 'rgba(255,122,122,0.14)',
+};
+
+/** Theme choices from the wireframes (G5); jade accent is part of each. */
+export const palettes = {
+  dark,
+  black: { ...dark, bg: '#000000', surf: '#0b0d11', surf2: '#14171d', raised: '#1d2129' },
+  light: {
+    ...dark,
+    bg: '#f5f6f9',
+    surf: '#ffffff',
+    surf2: '#eceef3',
+    raised: '#dfe2ea',
+    text: '#12161d',
+    muted: '#566072',
+    subtle: '#8a93a3',
+    line: 'rgba(0,0,0,0.09)',
+    warn: '#a85f00',
+    warnBg: 'rgba(168,95,0,0.12)',
+    danger: '#c43838',
+    dangerBg: 'rgba(196,56,56,0.12)',
+  },
+} as const satisfies Record<string, Palette>;
+
+/** Accent colour per theme: [on dark surfaces, on the light theme]. Text on the accent is dark, or white for the light-theme variants. */
+export const accents = {
+  jade: { dark: '#3ddbb0', light: '#0b8a6c' },
+  indigo: { dark: '#9aa3ff', light: '#4a54d6' },
+  amber: { dark: '#ffbf5e', light: '#a86400' },
+  rose: { dark: '#ff8fb0', light: '#c8386a' },
 } as const;
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${alpha})`;
+};
+
+/**
+ * Live colours. Styles read these when each screen module loads, so a change of theme or accent
+ * is applied by `applyAppearance` once at startup (before the app loads); the settings screen says
+ * it takes effect the next time the app opens.
+ */
+export const colors: Palette = { ...dark };
+
+/** Sets `colors` for the chosen theme and accent; returns whether the result is light (for the status bar). */
+export function applyAppearance(
+  theme: 'system' | 'light' | 'dark' | 'black',
+  accent: keyof typeof accents,
+  systemScheme: string | null | undefined,
+): 'light' | 'dark' {
+  const mode = theme === 'system' ? (systemScheme === 'light' ? 'light' : 'dark') : theme;
+  const base = palettes[mode];
+  const accentHex = accents[accent][mode === 'light' ? 'light' : 'dark'];
+  Object.assign(colors, base, {
+    accent: accentHex,
+    onAccent: mode === 'light' ? '#ffffff' : '#07130f',
+    tint: hexToRgba(accentHex, 0.14),
+  });
+  return mode === 'light' ? 'light' : 'dark';
+}
+
+/** The status bar icons to use on the current background. */
+export const statusBarStyle = () => (colors.bg === palettes.light.bg ? 'dark' : 'light');
 
 export const fonts = {
   sans: 'Manrope_500Medium',
