@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useMemo, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 
@@ -6,8 +7,12 @@ import type { BookRow } from './data/types';
 import { useBookList } from './data/useBookList';
 import { BookScreen } from './screens/BookScreen';
 import { BrowseScreen } from './screens/BrowseScreen';
+import { DownloadsScreen } from './screens/DownloadsScreen';
 import { HomeScreen } from './screens/HomeScreen';
-import { DownloadsScreen, YouScreen } from './screens/PlaceholderScreens';
+import { YouFlow } from './screens/YouFlow';
+import { loadProfile, type Profile, type ProfileApi } from './profile/profile';
+import { stubPorts, type PhonePorts } from './storage/ports';
+import type { Bookmark } from './bookmarks/bookmarks';
 import { colors } from './theme';
 import { TabBar, type TabKey } from './ui/TabBar';
 
@@ -16,7 +21,31 @@ import { TabBar, type TabKey } from './ui/TabBar';
  * ponytail: plain state instead of a router; move to expo-router when the player
  * and settings screens arrive and need deep links of their own.
  */
-export function Shell({ email, library, onSignOut }: { email: string; library: LibraryApi; onSignOut: () => void }) {
+export function Shell({
+  email,
+  library,
+  profileApi,
+  ports = stubPorts,
+  onJumpToBookmark = () => {},
+  onSignOut,
+}: {
+  email: string;
+  library: LibraryApi;
+  profileApi: ProfileApi;
+  /** The download queue and file storage (phase 5). Until it is wired in, the stub shows empty states. */
+  ports?: PhonePorts;
+  /** Opens the player at a bookmark (phase 5). */
+  onJumpToBookmark?: (bookmark: Bookmark) => void;
+  onSignOut: () => void;
+}) {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadProfile(profileApi, AsyncStorage).then((p) => live && setProfile(p));
+    return () => {
+      live = false;
+    };
+  }, [profileApi]);
   const [tab, setTab] = useState<TabKey>('home');
   const [open, setOpen] = useState<BookRow | null>(null);
   const books = useBookList(library);
@@ -40,15 +69,15 @@ export function Shell({ email, library, onSignOut }: { email: string; library: L
     <View style={styles.root}>
       <View style={styles.content}>
         {open ? (
-          <BookScreen book={open} volumes={volumes} library={library} onSelectVolume={setOpen} onBack={() => setOpen(null)} />
+          <BookScreen book={open} volumes={volumes} library={library} onSelectVolume={setOpen} onBack={() => setOpen(null)} onJump={onJumpToBookmark} />
         ) : tab === 'home' ? (
           <HomeScreen email={email} books={books} onOpen={setOpen} />
         ) : tab === 'browse' ? (
           <BrowseScreen books={books} onOpen={setOpen} />
         ) : tab === 'downloads' ? (
-          <DownloadsScreen />
+          <DownloadsScreen ports={ports} />
         ) : (
-          <YouScreen email={email} onSignOut={onSignOut} />
+          <YouFlow email={email} profile={profile} books={list ?? []} storage={ports.storage} onSignOut={onSignOut} />
         )}
       </View>
       <TabBar

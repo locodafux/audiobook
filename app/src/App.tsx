@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Manrope_500Medium, Manrope_700Bold, Manrope_800ExtraBold } from '@expo-google-fonts/manrope';
 import { Fraunces_700Bold } from '@expo-google-fonts/fraunces';
 import { useFonts } from 'expo-font';
@@ -7,6 +8,8 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { PhoneProvider } from './phone/PhoneProvider';
+import { supabaseProfile } from './profile/profile';
 import { createSignInController } from './auth/signInController';
 import { supabaseAuth } from './auth/supabaseAuth';
 import { readConfig } from './config';
@@ -15,7 +18,7 @@ import { AccessEndedScreen } from './screens/AccessEndedScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { Shell } from './Shell';
 import { createSupabaseClient } from './supabase';
-import { colors, fonts } from './theme';
+import { colors, fonts, statusBarStyle } from './theme';
 
 const config = readConfig();
 
@@ -24,11 +27,13 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
+      <StatusBar style={statusBarStyle()} />
       {!fontsReady ? (
         <View style={styles.fill} />
       ) : config ? (
-        <SignedInGate config={config} />
+        <PhoneProvider kv={AsyncStorage}>
+          <SignedInGate config={config} />
+        </PhoneProvider>
       ) : (
         <View style={[styles.fill, styles.center]}>
           <Text style={styles.error}>
@@ -42,9 +47,9 @@ export default function App() {
 
 /** Wires Supabase to the sign-in controller and picks the screen for its state. */
 function SignedInGate({ config }: { config: NonNullable<ReturnType<typeof readConfig>> }) {
-  const { client, library, controller } = useMemo(() => {
+  const { client, library, profileApi, controller } = useMemo(() => {
     const client = createSupabaseClient(config);
-    return { client, library: supabaseLibrary(client), controller: createSignInController(supabaseAuth(client)) };
+    return { client, library: supabaseLibrary(client), profileApi: supabaseProfile(client), controller: createSignInController(supabaseAuth(client)) };
   }, [config]);
   const state = useSyncExternalStore(controller.subscribe, controller.getState);
 
@@ -76,7 +81,7 @@ function SignedInGate({ config }: { config: NonNullable<ReturnType<typeof readCo
   }, [client, controller]);
 
   if (state.name === 'signed_in') {
-    return <Shell email={state.email} library={library} onSignOut={() => void controller.signOut()} />;
+    return <Shell email={state.email} library={library} profileApi={profileApi} onSignOut={() => void controller.signOut()} />;
   }
   if (state.name === 'access_ended') {
     return <AccessEndedScreen onSignOut={() => void controller.signOut()} />;

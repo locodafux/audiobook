@@ -3,12 +3,15 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import type { Bookmark } from '../bookmarks/bookmarks';
 import type { LibraryApi } from '../data/library';
 import type { BookRow, ChapterRow } from '../data/types';
 import { formatDuration, plural } from '../format';
 import { colors, fonts } from '../theme';
 import { Cover } from '../ui/Cover';
 import { Button, EmptyState } from '../ui/kit';
+import { Segmented } from '../ui/settingsKit';
+import { BookmarksTab } from './BookmarksTab';
 
 type Chapters = { status: 'loading' } | { status: 'error' } | { status: 'ready'; rows: ChapterRow[] };
 
@@ -19,13 +22,17 @@ export function BookScreen({
   library,
   onSelectVolume,
   onBack,
+  onJump = () => {},
 }: {
   book: BookRow;
   volumes: BookRow[];
   library: LibraryApi;
   onSelectVolume: (book: BookRow) => void;
   onBack: () => void;
+  /** Opens the player at a bookmark (the player owns playback). */
+  onJump?: (bookmark: Bookmark) => void;
 }) {
+  const [tab, setTab] = useState<'chapters' | 'bookmarks'>('chapters');
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ key: string; rows: ChapterRow[] | null } | null>(null);
   const key = `${book.id}:${attempt}`;
@@ -75,7 +82,9 @@ export function BookScreen({
         </View>
       ) : null}
       {book.description ? <Text style={styles.about}>{book.description}</Text> : null}
-      <Text style={styles.section}>Chapters</Text>
+      <View style={{ marginHorizontal: 20, marginTop: 20, marginBottom: 6 }}>
+        <Segmented value={tab} options={['chapters', 'bookmarks'] as const} label={(t) => (t === 'chapters' ? 'Chapters' : 'Bookmarks')} onChange={setTab} />
+      </View>
     </View>
   );
 
@@ -84,38 +93,42 @@ export function BookScreen({
       <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} hitSlop={8} style={styles.back}>
         <Feather name="chevron-left" size={24} color={colors.text} />
       </Pressable>
-      <FlatList
-        data={chapters.status === 'ready' ? chapters.rows : []}
-        keyExtractor={(c) => String(c.n)}
-        ListHeaderComponent={header}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        renderItem={({ item }) => (
-          <View style={styles.chapter}>
-            <Text style={styles.num}>{item.n}</Text>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text numberOfLines={2} style={styles.chTitle}>
-                {item.title}
-              </Text>
-              <Text style={styles.chMeta}>{formatDuration(item.duration_s) || '< 1m'}</Text>
+      {tab === 'bookmarks' ? (
+        <FlatList data={[]} renderItem={null} ListHeaderComponent={header} ListFooterComponent={<BookmarksTab bookId={book.id} onJump={onJump} />} />
+      ) : (
+        <FlatList
+          data={chapters.status === 'ready' ? chapters.rows : []}
+          keyExtractor={(c) => String(c.n)}
+          ListHeaderComponent={header}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          renderItem={({ item }) => (
+            <View style={styles.chapter}>
+              <Text style={styles.num}>{item.n}</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={2} style={styles.chTitle}>
+                  {item.title}
+                </Text>
+                <Text style={styles.chMeta}>{formatDuration(item.duration_s) || '< 1m'}</Text>
+              </View>
             </View>
-          </View>
-        )}
-        ListEmptyComponent={
-          chapters.status === 'loading' ? (
-            <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
-          ) : chapters.status === 'error' ? (
-            <EmptyState
-              icon="wifi-off"
-              tone="danger"
-              title="Chapters need a connection"
-              body="Connect and try again."
-              action={<Button label="Retry" variant="ghost" onPress={load} />}
-            />
-          ) : (
-            <EmptyState icon="clock" title="No chapters are ready yet" body={`${plural(book.chapter_count, 'chapter')} are being prepared.`} />
-          )
-        }
-      />
+          )}
+          ListEmptyComponent={
+            chapters.status === 'loading' ? (
+              <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
+            ) : chapters.status === 'error' ? (
+              <EmptyState
+                icon="wifi-off"
+                tone="danger"
+                title="Chapters need a connection"
+                body="Connect and try again."
+                action={<Button label="Retry" variant="ghost" onPress={load} />}
+              />
+            ) : (
+              <EmptyState icon="clock" title="No chapters are ready yet" body={`${plural(book.chapter_count, 'chapter')} are being prepared.`} />
+            )
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -142,7 +155,6 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.text },
   chipText: { fontFamily: fonts.sansBold, fontSize: 11.5, color: colors.muted },
   about: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 20, color: colors.muted, marginHorizontal: 20, marginTop: 14 },
-  section: { fontFamily: fonts.serif, fontSize: 16, color: colors.text, marginHorizontal: 20, marginTop: 20, marginBottom: 6 },
   chapter: { flexDirection: 'row', gap: 14, paddingVertical: 10, paddingHorizontal: 20, alignItems: 'center' },
   num: { width: 28, fontFamily: fonts.sansBold, fontSize: 13, color: colors.subtle },
   chTitle: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },
