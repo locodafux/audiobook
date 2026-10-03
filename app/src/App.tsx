@@ -4,18 +4,21 @@ import { Fraunces_700Bold } from '@expo-google-fonts/fraunces';
 import { useFonts } from 'expo-font';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { PhoneProvider } from './phone/PhoneProvider';
-import { supabaseProfile } from './profile/profile';
+import { PhoneProvider, usePhone } from './phone/PhoneProvider';
+import { supabaseProfile, type ProfileApi } from './profile/profile';
 import { createSignInController } from './auth/signInController';
 import { supabaseAuth } from './auth/supabaseAuth';
 import { readConfig } from './config';
-import { supabaseLibrary } from './data/library';
+import { supabaseLibrary, type LibraryApi } from './data/library';
 import { AccessEndedScreen } from './screens/AccessEndedScreen';
 import { SignInScreen } from './screens/SignInScreen';
+import { createServices } from './services';
+import { ServicesProvider, type Services } from './servicesContext';
 import { Shell } from './Shell';
 import { createSupabaseClient } from './supabase';
 import { colors, fonts, statusBarStyle } from './theme';
@@ -81,12 +84,39 @@ function SignedInGate({ config }: { config: NonNullable<ReturnType<typeof readCo
   }, [client, controller]);
 
   if (state.name === 'signed_in') {
-    return <Shell email={state.email} library={library} profileApi={profileApi} onSignOut={() => void controller.signOut()} />;
+    return <SignedIn client={client} email={state.email} library={library} profileApi={profileApi} onSignOut={() => void controller.signOut()} />;
   }
   if (state.name === 'access_ended') {
     return <AccessEndedScreen onSignOut={() => void controller.signOut()} />;
   }
   return <SignInScreen state={state} controller={controller} />;
+}
+
+/** Builds the player and downloads once per sign-in, then shows the app. */
+function SignedIn({ client, email, library, profileApi, onSignOut }: { client: SupabaseClient; email: string; library: LibraryApi; profileApi: ProfileApi; onSignOut: () => void }) {
+  const phone = usePhone();
+  const [services, setServices] = useState<Services | null>(null);
+  useEffect(() => {
+    let live = true;
+    let made: Services | null = null;
+    void createServices(client, phone).then((s) => {
+      made = s;
+      if (live) setServices(s);
+    });
+    // Save the place when the app goes to the background.
+    const sub = AppState.addEventListener('change', (st) => st !== 'active' && made?.player.flush());
+    return () => {
+      live = false;
+      sub.remove();
+      made?.player.close();
+    };
+  }, [client, phone]);
+  if (!services) return null;
+  return (
+    <ServicesProvider value={services}>
+      <Shell email={email} library={library} profileApi={profileApi} onSignOut={onSignOut} />
+    </ServicesProvider>
+  );
 }
 
 const styles = StyleSheet.create({

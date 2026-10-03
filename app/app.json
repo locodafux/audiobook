@@ -7,7 +7,9 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "platforms": ["android"],
+    "platforms": [
+      "android"
+    ],
     "android": {
       "package": "com.locodafux.hearthread",
       "versionCode": 1,
@@ -19,6 +21,10 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "plugins": ["expo-secure-store", "expo-font"]
+    "plugins": [
+      "expo-secure-store",
+      "expo-font",
+      "expo-audio"
+    ]
   }
 }
