@@ -31,9 +31,9 @@ jobs:
         uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Apply migrations
+      - name: Apply migrations (database only; same services as the database job)
         if: hashFiles('supabase/migrations/*.sql') != ''
-        run: supabase start
+        run: supabase start -x edge-runtime,realtime,storage-api,imgproxy,studio,mailpit,vector,logflare,supavisor
       - name: Test
         working-directory: generator
         run: uv run pytest -q -rs

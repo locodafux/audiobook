@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from urllib.parse import urlparse
 
+import psycopg
 import pytest
 
 from fakes import LOCAL_DB, FakeBackup, FakeStore, FakeVoice, make_book, make_mp3, mk_settings
@@ -27,6 +28,13 @@ def _db_url() -> str:
     host = urlparse(url).hostname
     if host not in ("127.0.0.1", "localhost", "::1"):
         pytest.exit(f"refusing to run tests against non-local database host {host!r}", returncode=2)
+    try:  # one quick probe, so an absent database skips every test fast instead of 30 s each
+        psycopg.connect(url, connect_timeout=3).close()
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(
+            f"local Supabase database not reachable ({type(exc).__name__}); run `supabase start`",
+            allow_module_level=False,
+        )
     return url
 
 
@@ -34,13 +42,7 @@ def _db_url() -> str:
 def db(_db_url):
     """A clean local database. Skipped (with the reason) until the migrations are applied."""
     d = Db(_db_url)
-    try:
-        has = d.one("SELECT to_regclass('public.jobs') IS NOT NULL AS ok")["ok"]
-    except Exception as exc:  # noqa: BLE001
-        d.close()
-        pytest.skip(
-            f"local Supabase database not reachable ({type(exc).__name__}); run `supabase start`"
-        )
+    has = d.one("SELECT to_regclass('public.jobs') IS NOT NULL AS ok")["ok"]
     if not has:
         d.close()
         pytest.skip(
