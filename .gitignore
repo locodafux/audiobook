@@ -1,0 +1,49 @@
+# secrets: only .env.example (names, no values) is committed
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.pem
+*.p12
+local-rules*
+.local-rules/
+
+# build output
+node_modules/
+.expo/
+app/android/
+app/ios/
+**/build/
+*.apk
+*.aab
+
+# python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# supabase local
+supabase/.branches/
+supabase/.temp/
+
+# books and audio never go in the repo
+*.epub
+*.mp3
+*.m4a
+*.wav
+.tts-cache/
+tmp/
+
+.DS_Store
+
+# local-only drafts from the earlier scaffold attempt (not part of this layout)
+/apps/
+/services/
+/package.json
+/pnpm-lock.yaml
+/pnpm-workspace.yaml
+/.npmrc
+/.nvmrc
+/justfile
