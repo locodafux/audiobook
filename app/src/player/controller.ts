@@ -97,7 +97,9 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
 
   let lastActiveAt = now();
   let lastSavedPos = 0;
+  // finishedMarked: counted as Finished (within 5 s of the end). endHandled: the end itself was acted on.
   let finishedMarked = false;
+  let endHandled = false;
   let volume = 1;
   let listenedS = 0;
   let lastTickAt: number | null = null;
@@ -130,7 +132,8 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
 
   function finishChapter() {
     const { book, chapterN, sleep } = state.get();
-    if (!book || chapterN === null || finishedMarked) return;
+    if (!book || chapterN === null || endHandled) return;
+    endHandled = true;
     finishedMarked = true;
     positions.markFinished(book.id, chapterN);
     positions.save(book.id, chapterN, 0, now());
@@ -189,6 +192,7 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
     const row = chapters.find((c) => c.n === n);
     set({ book, chapters, chapterN: n, load: 'loading', playing: false, position: startAt, duration: row?.duration_s ?? 0, sentences: [], sentenceIndex: -1, rewound: null, speed: speedFor(settings.getState(), book.id) });
     finishedMarked = false;
+    endHandled = false;
     lastSavedPos = startAt;
     engine.pause();
 

@@ -200,6 +200,17 @@ describe('player', () => {
     expect(t.player.state.get()).toMatchObject({ chapterN: 2, load: 'ready', playing: true });
   });
 
+  it('still moves on at the end after being tagged finished near the end', async () => {
+    const t = setup();
+    await t.player.open(book, chapters, 1, true);
+    t.engine.tick(60 - FINISHED_WITHIN_S + 1);
+    expect(t.positions.isFinished(book.id, 1)).toBe(true);
+    t.engine.emit({ ended: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(t.player.state.get()).toMatchObject({ chapterN: 2, load: 'ready', playing: true });
+  });
+
   it('tags a chapter finished within 5 s of the end', async () => {
     const t = setup();
     await t.player.open(book, chapters, 1, true);
