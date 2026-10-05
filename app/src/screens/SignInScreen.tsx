@@ -1,7 +1,6 @@
 import { Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { SignInController } from '../auth/signInController';
@@ -20,16 +19,15 @@ const entryMessages: Record<EntryError, string> = {
 
 const codeMessages: Record<CodeError, string> = {
   invalid: 'That code is not right. Check the email and try again.',
-  expired: 'That code has expired. Tap resend for a new one.',
+  // GoTrue answers a wrong code with the same error as an old one, so the message covers both.
+  expired: 'That code is wrong or has expired. Check the email, or tap resend for a new one.',
   offline: 'You are offline. Connect and try again.',
   failed: 'Could not check the code. Try again.',
 };
 
 function Logo() {
   return (
-    <LinearGradient colors={[colors.accent, '#7a5cff']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.logo}>
-      <Feather name="book-open" size={28} color={colors.onAccent} />
-    </LinearGradient>
+    <Image accessibilityLabel="Hearthread" source={require('../../assets/icon.png')} style={styles.logo} />
   );
 }
 
@@ -218,7 +216,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   center: { alignItems: 'center', justifyContent: 'center', gap: 16, padding: 30 },
   frame: { padding: 26, paddingTop: 40, gap: 14 },
-  logo: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  logo: { width: 54, height: 54, borderRadius: 18 },
   strong: { fontFamily: fonts.sansBold, color: colors.text },
   label: { fontFamily: fonts.sansHeavy, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted, marginBottom: 6 },
   field: { backgroundColor: colors.surf, borderRadius: 16, padding: 14, borderWidth: 1.5, borderColor: colors.line },

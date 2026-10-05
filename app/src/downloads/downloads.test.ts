@@ -264,6 +264,10 @@ describe('download-links answer', () => {
     const [l] = parseLinks({ chapters: [{ n: 3, audio_url: 'a', timing_url: 't', bytes: 5, sha256: 'ABC', expires_in: 900 }] }, 1000);
     expect(l).toEqual({ n: 3, audioUrl: 'a', timingUrl: 't', bytes: 5, sha256: 'abc', expiresAt: 901_000 });
   });
+  it('leaves out a chapter that is not ready instead of failing the others', () => {
+    const ready = { n: 1, audio_url: 'a', timing_url: 't', bytes: 5, sha256: 'abc', expires_in: 900 };
+    expect(parseLinks({ chapters: [ready, { n: 2, error: 'not_available' }] }, 0).map((l) => l.n)).toEqual([1]);
+  });
   it('rejects an answer it does not understand', () => {
     expect(() => parseLinks({ nope: 1 }, 0)).toThrow(LinksError);
     expect(() => parseLinks({ chapters: [{ n: 1 }] }, 0)).toThrow(LinksError);

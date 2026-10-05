@@ -42,7 +42,8 @@ export interface LinksApi {
 export function parseLinks(body: unknown, now: number): ChapterLink[] {
   const rows = (body as { chapters?: unknown } | null)?.chapters;
   if (!Array.isArray(rows)) throw new LinksError('unavailable', 'unexpected answer from download-links');
-  return rows.map((r: Record<string, unknown>) => {
+  // A chapter that is not ready comes back as `{ n, error }`: leave it out so only that chapter fails (the queue treats a missing one as not available).
+  return rows.filter((r: Record<string, unknown>) => typeof r?.error !== 'string').map((r: Record<string, unknown>) => {
     const expiresIn = typeof r.expires_in === 'number' ? r.expires_in : 900;
     if (typeof r.n !== 'number' || typeof r.audio_url !== 'string' || typeof r.timing_url !== 'string' || typeof r.bytes !== 'number' || typeof r.sha256 !== 'string') {
       throw new LinksError('unavailable', 'unexpected chapter in download-links answer');
