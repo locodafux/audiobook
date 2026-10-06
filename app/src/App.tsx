@@ -5,13 +5,13 @@ import { Manrope_700Bold } from '@expo-google-fonts/manrope/700Bold';
 import { Manrope_800ExtraBold } from '@expo-google-fonts/manrope/800ExtraBold';
 import { Fraunces_700Bold } from '@expo-google-fonts/fraunces/700Bold';
 import { useFonts } from 'expo-font';
-import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { supabaseAdmin, type AdminApi } from './admin/adminApi';
 import { PhoneProvider, usePhone } from './phone/PhoneProvider';
 import { supabaseProfile, type ProfileApi } from './profile/profile';
 import { createSignInController } from './auth/signInController';
@@ -19,6 +19,7 @@ import { supabaseAuth } from './auth/supabaseAuth';
 import { readConfig } from './config';
 import { supabaseLibrary, type LibraryApi } from './data/library';
 import { AccessEndedScreen } from './screens/AccessEndedScreen';
+import { PendingScreen } from './screens/PendingScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { createServices } from './services';
 import { ServicesProvider, type Services } from './servicesContext';
@@ -53,23 +54,18 @@ export default function App() {
 
 /** Wires Supabase to the sign-in controller and picks the screen for its state. */
 function SignedInGate({ config }: { config: NonNullable<ReturnType<typeof readConfig>> }) {
-  const { client, library, profileApi, controller } = useMemo(() => {
+  const { client, library, profileApi, adminApi, controller } = useMemo(() => {
     const client = createSupabaseClient(config);
-    return { client, library: supabaseLibrary(client), profileApi: supabaseProfile(client), controller: createSignInController(supabaseAuth(client)) };
+    return { client, library: supabaseLibrary(client), profileApi: supabaseProfile(client), adminApi: supabaseAdmin(client), controller: createSignInController(supabaseAuth(client)) };
   }, [config]);
   const state = useSyncExternalStore(controller.subscribe, controller.getState);
 
   useEffect(() => {
-    let live = true;
-    const urlSub = Linking.addEventListener('url', ({ url }) => void controller.openLink(url));
-    void controller.start().then(async () => {
-      const initial = await Linking.getInitialURL();
-      if (live) await controller.openLink(initial);
-    });
+    void controller.start();
     const { data: auth } = client.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') controller.sessionLost();
     });
-    // Keep the token fresh only while the app is open, and re-check the invite on return.
+    // Keep the token fresh only while the app is open, and re-check the approval on return.
     const appSub = AppState.addEventListener('change', (s) => {
       if (s === 'active') {
         void client.auth.startAutoRefresh();
@@ -79,15 +75,16 @@ function SignedInGate({ config }: { config: NonNullable<ReturnType<typeof readCo
       }
     });
     return () => {
-      live = false;
-      urlSub.remove();
       auth.subscription.unsubscribe();
       appSub.remove();
     };
   }, [client, controller]);
 
   if (state.name === 'signed_in') {
-    return <SignedIn client={client} email={state.email} library={library} profileApi={profileApi} onSignOut={() => void controller.signOut()} />;
+    return <SignedIn client={client} username={state.username} library={library} profileApi={profileApi} adminApi={adminApi} onSignOut={() => void controller.signOut()} />;
+  }
+  if (state.name === 'pending') {
+    return <PendingScreen username={state.username} onCheck={() => controller.recheckAccess()} onSignOut={() => void controller.signOut()} />;
   }
   if (state.name === 'access_ended') {
     return <AccessEndedScreen onSignOut={() => void controller.signOut()} />;
@@ -96,7 +93,7 @@ function SignedInGate({ config }: { config: NonNullable<ReturnType<typeof readCo
 }
 
 /** Builds the player and downloads once per sign-in, then shows the app. */
-function SignedIn({ client, email, library, profileApi, onSignOut }: { client: SupabaseClient; email: string; library: LibraryApi; profileApi: ProfileApi; onSignOut: () => void }) {
+function SignedIn({ client, username, library, profileApi, adminApi, onSignOut }: { client: SupabaseClient; username: string; library: LibraryApi; profileApi: ProfileApi; adminApi: AdminApi; onSignOut: () => void }) {
   const phone = usePhone();
   const [services, setServices] = useState<Services | null>(null);
   useEffect(() => {
@@ -117,7 +114,7 @@ function SignedIn({ client, email, library, profileApi, onSignOut }: { client: S
   if (!services) return null;
   return (
     <ServicesProvider value={services}>
-      <Shell email={email} library={library} profileApi={profileApi} onSignOut={onSignOut} />
+      <Shell username={username} library={library} profileApi={profileApi} adminApi={adminApi} onSignOut={onSignOut} />
     </ServicesProvider>
   );
 }

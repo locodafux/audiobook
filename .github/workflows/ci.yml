@@ -92,3 +92,17 @@ jobs:
       - run: deno fmt --check
       - run: deno lint
       - run: deno test --frozen
+
+  accounts-function:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/functions/accounts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno fmt --check
+      - run: deno lint
+      - run: deno test --frozen

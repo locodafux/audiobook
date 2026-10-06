@@ -3,7 +3,6 @@
     "name": "Hearthread",
     "slug": "hearthread",
     "version": "0.1.0",
-    "scheme": "hearthread",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",

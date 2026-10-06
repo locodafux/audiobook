@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { Button, textStyles } from '../ui/kit';
 
-/** Shown when the invite was removed. Downloaded files stay on the phone, locked, until sign-in. */
+/** Shown when access was removed or the request was rejected. Downloaded files stay on the phone, locked, until sign-in. */
 export function AccessEndedScreen({ onSignOut }: { onSignOut: () => void }) {
   return (
     <SafeAreaView style={styles.safe}>
@@ -16,9 +16,9 @@ export function AccessEndedScreen({ onSignOut }: { onSignOut: () => void }) {
           Your access has ended
         </Text>
         <Text style={textStyles.body}>
-          This email is no longer on the invite list. Ask whoever invited you if you think that’s a mistake.
+          This username is not approved. Ask the person who runs Hearthread if you think that’s a mistake.
         </Text>
-        <Button label="Sign in with another email" onPress={onSignOut} />
+        <Button label="Back to log in" onPress={onSignOut} />
       </View>
     </SafeAreaView>
   );

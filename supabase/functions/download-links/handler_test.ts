@@ -38,8 +38,8 @@ function fake(
   return { deps, signed };
 }
 
-Deno.test("deny when revoked, even with a valid token, and sign nothing", async () => {
-  for (const member of ["revoked", null]) {
+Deno.test("deny when pending approval, revoked or unknown, even with a valid token, and sign nothing", async () => {
+  for (const member of ["pending", "revoked", null]) {
     const { deps, signed } = fake({ member });
     const res = await handle(call({ book_id: "b1", chapters: [1] }), deps);
     assertEquals(res.status, 403);

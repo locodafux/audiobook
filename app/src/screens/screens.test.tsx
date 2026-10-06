@@ -9,6 +9,7 @@ import type { BookListState } from '../data/useBookList';
 import { BookScreen } from './BookScreen';
 import { BrowseScreen } from './BrowseScreen';
 import { HomeScreen } from './HomeScreen';
+import { PendingScreen } from './PendingScreen';
 import { SignInScreen } from './SignInScreen';
 
 jest.mock('@react-native-async-storage/async-storage', () => jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'));
@@ -60,14 +61,14 @@ describe('Browse', () => {
 
 describe('Home', () => {
   it('shows the covers grid with the gradient fallback titles', async () => {
-    await render(<HomeScreen email="ana@mail.com" books={{ state: ready(), refresh: jest.fn() }} onOpen={jest.fn()} />);
-    expect(screen.getByText('ana@mail.com')).toBeTruthy();
+    await render(<HomeScreen username="ana" books={{ state: ready(), refresh: jest.fn() }} onOpen={jest.fn()} />);
+    expect(screen.getByText('ana')).toBeTruthy();
     expect(screen.getAllByText('Small Habits').length).toBeGreaterThan(0);
   });
 
   it('shows the empty state for an empty library', async () => {
     const state: BookListState = { status: 'ready', refreshing: false, list: { books: [], source: 'network', fetchedAt: 0 } };
-    await render(<HomeScreen email="a@b.co" books={{ state, refresh: jest.fn() }} onOpen={jest.fn()} />);
+    await render(<HomeScreen username="abc" books={{ state, refresh: jest.fn() }} onOpen={jest.fn()} />);
     expect(screen.getByText('Nothing here yet')).toBeTruthy();
   });
 });
@@ -109,44 +110,99 @@ describe('Book', () => {
 
 describe('Sign-in screen', () => {
   const api = (over: Partial<AuthApi> = {}): AuthApi => ({
-    requestCode: async () => {},
-    verifyCode: async () => {},
-    exchangeLinkCode: async () => {},
+    register: async () => {},
+    signIn: async () => {},
     restoreSession: async () => null,
     checkAccess: async () => 'active',
     signOut: async () => {},
     ...over,
   });
-
-  it('shows the invite-list message for a stranger', async () => {
-    const controller = createSignInController(
-      api({
-        requestCode: async () => {
-          throw new AuthFlowError('not_invited');
-        },
-      }),
-    );
+  const started = async (over: Partial<AuthApi> = {}) => {
+    const controller = createSignInController(api(over));
     await controller.start();
-    controller.setEmail('dave@yahoo.com');
-    await controller.submitEmail();
-    await render(<SignInScreen state={controller.getState()} controller={controller} />);
-    expect(screen.getByText('This email isn’t on the invite list.')).toBeTruthy();
+    return controller;
+  };
+  /** Re-renders with the controller's current state, as App does through useSyncExternalStore. */
+  const view = (controller: Awaited<ReturnType<typeof started>>) => <SignInScreen state={controller.getState()} controller={controller} />;
+
+  it('logs in with a username and password, with no email or code anywhere', async () => {
+    const signIn = jest.fn(async () => {});
+    const controller = await started({ signIn });
+    await render(view(controller));
+    expect(screen.getByText('Log in')).toBeTruthy();
+    expect(screen.queryByText(/email|code|link/i)).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('Username'), 'Ana');
+    await fireEvent.changeText(screen.getByLabelText('Password'), 'secret-pass');
+    await fireEvent.press(screen.getByText('Log in'));
+    expect(signIn).toHaveBeenCalledWith('ana', 'secret-pass');
   });
 
-  it('asks for the 6-digit code after the link is sent', async () => {
-    const controller = createSignInController(api());
-    await controller.start();
-    controller.setEmail('ana@mail.com');
-    await controller.submitEmail();
-    await render(<SignInScreen state={controller.getState()} controller={controller} />);
-    expect(screen.getByText('Check your email')).toBeTruthy();
-    expect(screen.getByLabelText('6-digit code')).toBeTruthy();
+  it('shows the message for a wrong password', async () => {
+    const controller = await started({
+      signIn: async () => {
+        throw new AuthFlowError('invalid_login');
+      },
+    });
+    const { rerender } = await render(view(controller));
+    await fireEvent.changeText(screen.getByLabelText('Username'), 'ana');
+    await fireEvent.changeText(screen.getByLabelText('Password'), 'nope-nope');
+    await fireEvent.press(screen.getByText('Log in'));
+    await rerender(view(controller));
+    expect(screen.getByText('That username and password do not match.')).toBeTruthy();
+  });
+
+  it('register asks for a confirmation and warns that approval is needed', async () => {
+    const register = jest.fn(async () => {});
+    const controller = await started({ register, checkAccess: async () => 'pending' });
+    controller.setMode('register');
+    const { rerender } = await render(view(controller));
+    expect(screen.getByText('Someone has to approve your request before you can listen.')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Username'), 'maria');
+    await fireEvent.changeText(screen.getByLabelText('Password'), 'longenough1');
+    await fireEvent.changeText(screen.getByLabelText('Confirm password'), 'different-one');
+    await fireEvent.press(screen.getByText('Send my request'));
+    await rerender(view(controller));
+    expect(screen.getByText('The two passwords are not the same.')).toBeTruthy();
+    expect(register).not.toHaveBeenCalled();
+    await fireEvent.changeText(screen.getByLabelText('Confirm password'), 'longenough1');
+    await fireEvent.press(screen.getByText('Send my request'));
+    expect(register).toHaveBeenCalledWith('maria', 'longenough1');
+    expect(controller.getState()).toEqual({ name: 'pending', username: 'maria' });
+  });
+
+  it('tells a registrant that the username is taken', async () => {
+    const controller = await started({
+      register: async () => {
+        throw new AuthFlowError('username_taken');
+      },
+    });
+    controller.setMode('register');
+    const { rerender } = await render(view(controller));
+    await fireEvent.changeText(screen.getByLabelText('Username'), 'maria');
+    await fireEvent.changeText(screen.getByLabelText('Password'), 'longenough1');
+    await fireEvent.changeText(screen.getByLabelText('Confirm password'), 'longenough1');
+    await fireEvent.press(screen.getByText('Send my request'));
+    await rerender(view(controller));
+    expect(screen.getByText('That username is taken. Pick another one.')).toBeTruthy();
+  });
+});
+
+describe('Waiting for approval', () => {
+  it('shows the waiting screen with a way to check again and to sign out', async () => {
+    const onCheck = jest.fn(async () => {});
+    const onSignOut = jest.fn();
+    await render(<PendingScreen username="maria" onCheck={onCheck} onSignOut={onSignOut} />);
+    expect(screen.getByText('Waiting for approval')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Check again'));
+    expect(onCheck).toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('Sign out'));
+    expect(onSignOut).toHaveBeenCalled();
   });
 });
 
 describe('Shell', () => {
   it('keeps the Browse search when coming back from a book', async () => {
-    await render(<Shell email="a@b.co" library={fixtureLibrary()} profileApi={{ get: async () => null }} onSignOut={jest.fn()} />);
+    await render(<Shell username="abc" library={fixtureLibrary()} profileApi={{ get: async () => null }} onSignOut={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Browse'));
     await fireEvent.changeText(await screen.findByLabelText('Search books'), 'orchard');
     await fireEvent.press(await screen.findByText('The Quiet Orchard'));

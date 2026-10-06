@@ -4,8 +4,8 @@ import type { KeyValueStore } from '../data/offlineList';
 
 export const PROFILE_KEY = 'hearthread.profile.v1';
 
-/** From the signed-in person's own `members` row ("invited by Leo"). */
-export type Profile = { displayName: string; invitedBy: string | null };
+/** From the signed-in person's own `members` row. `isAdmin` only decides whether the Requests screen is offered; the server checks it again. */
+export type Profile = { displayName: string; invitedBy: string | null; isAdmin: boolean };
 
 export interface ProfileApi {
   /** Null when there is no row to read (for example the server is unreachable); throws on errors. */
@@ -16,9 +16,9 @@ export interface ProfileApi {
 export function supabaseProfile(client: SupabaseClient): ProfileApi {
   return {
     async get() {
-      const { data, error } = await client.from('members').select('display_name,invited_by').maybeSingle();
+      const { data, error } = await client.from('members').select('display_name,invited_by,is_admin').maybeSingle();
       if (error) throw error;
-      return data ? { displayName: String(data.display_name), invitedBy: (data.invited_by as string | null) ?? null } : null;
+      return data ? { displayName: String(data.display_name), invitedBy: (data.invited_by as string | null) ?? null, isAdmin: data.is_admin === true } : null;
     },
   };
 }
@@ -26,7 +26,7 @@ export function supabaseProfile(client: SupabaseClient): ProfileApi {
 const parse = (raw: string | null): Profile | null => {
   try {
     const p = JSON.parse(raw ?? 'null') as Partial<Profile> | null;
-    return p && typeof p.displayName === 'string' ? { displayName: p.displayName, invitedBy: typeof p.invitedBy === 'string' ? p.invitedBy : null } : null;
+    return p && typeof p.displayName === 'string' ? { displayName: p.displayName, invitedBy: typeof p.invitedBy === 'string' ? p.invitedBy : null, isAdmin: p.isAdmin === true } : null;
   } catch {
     return null;
   }

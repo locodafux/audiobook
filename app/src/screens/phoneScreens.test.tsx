@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import type { ReactElement, ReactNode } from 'react';
 
+import type { AdminApi, MemberItem } from '../admin/adminApi';
 import { fixtureBooks, fixtureLibrary } from '../data/fixtures';
 import { memoryStore } from '../phone/memoryStore';
 import { PhoneProvider, createPhone, type Phone } from '../phone/PhoneProvider';
@@ -78,9 +79,9 @@ describe('swipe', () => {
 });
 
 describe('You', () => {
-  const profile = { displayName: 'Maria', invitedBy: 'Leo' };
+  const profile = { displayName: 'Maria', invitedBy: 'Leo', isAdmin: false };
   const you = (extra: Partial<Parameters<typeof YouFlow>[0]> = {}) => (
-    <YouFlow email="maria@mail.com" profile={profile} books={fixtureBooks} storage={fakeStorage([]).port} onSignOut={jest.fn()} {...extra} />
+    <YouFlow username="maria" profile={profile} books={fixtureBooks} storage={fakeStorage([]).port} onSignOut={jest.fn()} {...extra} />
   );
 
   it('shows name, who invited you, and this week', async () => {
@@ -89,15 +90,73 @@ describe('You', () => {
     await renderWithPhone(you(), phone);
     await flush();
     expect(screen.getByText('Maria')).toBeTruthy();
-    expect(screen.getByText('maria@mail.com · invited by Leo')).toBeTruthy();
+    expect(screen.getByText('@maria · invited by Leo')).toBeTruthy();
     expect(screen.getByText('1h 0m')).toBeTruthy();
     expect(screen.getByText('1-day streak')).toBeTruthy();
   });
 
-  it('falls back to the email when the profile is not known', async () => {
+  it('falls back to the username when the profile is not known', async () => {
     await renderWithPhone(you({ profile: null }));
     await flush();
-    expect(screen.getAllByText('maria@mail.com').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('maria').length).toBeGreaterThan(0);
+  });
+
+  describe('admin', () => {
+    const member = (userId: string, username: string, status: MemberItem['status']): MemberItem => ({ userId, username, status, isAdmin: false, createdAt: '2026-10-06T00:00:00Z' });
+    const fakeAdmin = (members: MemberItem[]) => {
+      const calls: string[] = [];
+      const api: AdminApi = {
+        list: async () => members,
+        setStatus: async (id, status) => void calls.push(`setStatus:${id}:${status}`),
+        resetPassword: async (id, password) => void calls.push(`reset:${id}:${password}`),
+      };
+      return { api, calls };
+    };
+
+    it('is not offered to a normal member', async () => {
+      await renderWithPhone(you({ adminApi: fakeAdmin([]).api }));
+      await flush();
+      expect(screen.queryByText('Requests')).toBeNull();
+    });
+
+    it('lets the admin approve or reject a request', async () => {
+      const { api, calls } = fakeAdmin([member('u1', 'maria', 'pending'), member('u2', 'ben', 'pending')]);
+      await renderWithPhone(you({ profile: { ...profile, isAdmin: true }, adminApi: api }));
+      await flush();
+      await fireEvent.press(screen.getByLabelText(/^Requests/));
+      await flush();
+      expect(screen.getByText('maria')).toBeTruthy();
+      await fireEvent.press(screen.getAllByText('Approve')[0]!);
+      await flush();
+      await fireEvent.press(screen.getAllByText('Reject')[1]!);
+      await flush();
+      expect(calls).toEqual(['setStatus:u1:active', 'setStatus:u2:revoked']);
+    });
+
+    it('lets the admin set a new password for a member who forgot theirs', async () => {
+      const { api, calls } = fakeAdmin([member('u1', 'maria', 'active')]);
+      await renderWithPhone(you({ profile: { ...profile, isAdmin: true }, adminApi: api }));
+      await flush();
+      await fireEvent.press(screen.getByLabelText(/^Requests/));
+      await flush();
+      await fireEvent.press(screen.getByText('Reset password'));
+      await fireEvent.changeText(screen.getByLabelText('New password for maria'), 'short');
+      await fireEvent.press(screen.getByText('Set password'));
+      expect(calls).toEqual([]); // too short: the button does nothing
+      await fireEvent.changeText(screen.getByLabelText('New password for maria'), 'a-better-pass');
+      await fireEvent.press(screen.getByText('Set password'));
+      await flush();
+      expect(calls).toEqual(['reset:u1:a-better-pass']);
+    });
+
+    it('says so when the list cannot be loaded', async () => {
+      const api: AdminApi = { list: () => Promise.reject(new Error('x')), setStatus: async () => {}, resetPassword: async () => {} };
+      await renderWithPhone(you({ profile: { ...profile, isAdmin: true }, adminApi: api }));
+      await flush();
+      await fireEvent.press(screen.getByLabelText(/^Requests/));
+      await flush();
+      expect(screen.getByText('Could not load the list')).toBeTruthy();
+    });
   });
 
   it('asks before signing out', async () => {
