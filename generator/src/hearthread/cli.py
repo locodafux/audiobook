@@ -10,7 +10,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from . import invites, library
+from . import importer, invites, library
 from .deps import Deps, build
 from .library import CommandError
 from .settings import REQUIRED, ConfigError, Settings, load_env
@@ -135,6 +135,19 @@ def make_parser() -> argparse.ArgumentParser:
         "re-upload chapters to Telegram from the library folder",
         (("--all",), {"action": "store_true", "help": "every ready chapter (Telegram lost files)"}),
     )
+    cmd(
+        "import-voiced",
+        "bring chapters voiced by the previous app into Telegram and the list",
+        (("folder",), {"type": Path}),
+        (("--id",), {"required": True, "help": "short book id / library folder"}),
+        (("--title",), {"required": True}),
+        (("--author",), {}),
+        (("--series",), {"help": "series title"}),
+        (("--volume",), {"type": int}),
+        (("--first-chapter",), {"type": int, "default": 1, "help": "number shown for file 1"}),
+        (("--private-to",), {"metavar": "EMAIL", "help": "only this member can see the book"}),
+        (("--limit",), {"type": int, "help": "upload at most this many chapters, then stop"}),
+    )
     cmd("remove", "delete a book from the list and the library folder", book, yes)
     inv = cmd("invite", "manage who may sign in").add_subparsers(dest="invite_cmd", required=True)
     a = inv.add_parser("add", parents=[common], help="invite an email address")
@@ -182,6 +195,20 @@ def dispatch(args: argparse.Namespace, deps: Deps, confirm: Callable[[str], bool
         library.regen(deps, args.book, args.chapters, args.accept_renumber)
     elif c == "backup-retry":
         print(f"queued {library.backup_retry(deps, args.all)} uploads")
+    elif c == "import-voiced":
+        ok = importer.import_voiced(
+            deps,
+            args.folder,
+            args.id,
+            args.title,
+            args.author,
+            args.series,
+            args.volume,
+            args.first_chapter,
+            args.private_to,
+            args.limit,
+        )
+        return 0 if ok else 1
     elif c == "remove":
         library.remove(deps, args.book, ask)
     elif c == "clean":
