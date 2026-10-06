@@ -41,6 +41,7 @@ export function fixtureLibrary(
 ): LibraryApi {
   return {
     listBooks: async () => books,
+    getDescription: async (bookId) => books.find((b) => b.id === bookId)?.description ?? null,
     listChapters: async (bookId) =>
       Array.from({ length: chaptersPerBook[bookId] ?? 5 }, (_, i) => makeChapter(bookId, i + 1)),
   };

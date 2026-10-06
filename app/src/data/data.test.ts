@@ -1,3 +1,4 @@
+import { fetchDescription, readSavedDescription } from './description';
 import { fixtureBooks, fixtureLibrary, makeBook } from './fixtures';
 import { supabaseLibrary } from './library';
 import { BOOK_LIST_KEY, loadBookList, type KeyValueStore } from './offlineList';
@@ -104,6 +105,34 @@ describe('supabaseLibrary', () => {
   });
 });
 
+describe('book descriptions', () => {
+  it('leaves the long description out of the list select', () => {
+    expect(BOOK_COLUMNS.split(',')).not.toContain('description');
+  });
+
+  it('asks for one description by book id', async () => {
+    const log: string[] = [];
+    const b: Record<string, unknown> = {
+      select: (c: string) => (log.push(`select ${c}`), b),
+      eq: (c: string, v: string) => (log.push(`eq ${c} ${v}`), b),
+      maybeSingle: async () => ({ data: { description: 'A long tale.' }, error: null }),
+    };
+    const api = supabaseLibrary({ from: () => b } as never);
+    expect(await api.getDescription('quiet-orchard')).toBe('A long tale.');
+    expect(log).toEqual(['select description', 'eq id quiet-orchard']);
+  });
+
+  it('keeps a fetched description for offline, per book', async () => {
+    const store = memoryStore();
+    const api = fixtureLibrary([makeBook({ id: 'a', title: 'A', description: 'About A' })]);
+    expect(await fetchDescription(api, store, 'a')).toBe('About A');
+    const offline = { ...api, getDescription: async () => Promise.reject(new Error('offline')) };
+    await expect(fetchDescription(offline, store, 'a')).rejects.toThrow('offline');
+    expect(await readSavedDescription(store, 'a')).toBe('About A');
+    expect(await readSavedDescription(store, 'b')).toBeNull();
+  });
+});
+
 describe('loadBookList (offline copy)', () => {
   it('saves what it fetched', async () => {
     const store = memoryStore();
@@ -115,17 +144,17 @@ describe('loadBookList (offline copy)', () => {
   it('falls back to the saved copy when the fetch fails', async () => {
     const store = memoryStore();
     await loadBookList(fixtureLibrary(), store, () => 1000);
-    const offline = { listBooks: async () => Promise.reject(new Error('offline')), listChapters: async () => [] };
+    const offline = { listBooks: async () => Promise.reject(new Error('offline')), listChapters: async () => [], getDescription: async () => null };
     expect(await loadBookList(offline, store)).toEqual({ books: fixtureBooks, source: 'cache', fetchedAt: 1000 });
   });
 
   it('throws when offline with no saved copy', async () => {
-    const offline = { listBooks: async () => Promise.reject(new Error('offline')), listChapters: async () => [] };
+    const offline = { listBooks: async () => Promise.reject(new Error('offline')), listChapters: async () => [], getDescription: async () => null };
     await expect(loadBookList(offline, memoryStore())).rejects.toThrow('offline');
   });
 
   it('ignores a corrupt saved copy', async () => {
-    const offline = { listBooks: async () => Promise.reject(new Error('offline')), listChapters: async () => [] };
+    const offline = { listBooks: async () => Promise.reject(new Error('offline')), listChapters: async () => [], getDescription: async () => null };
     await expect(loadBookList(offline, memoryStore({ [BOOK_LIST_KEY]: '{nope' }))).rejects.toThrow('offline');
   });
 

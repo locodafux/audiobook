@@ -108,7 +108,7 @@ export function Shell({
       <UpdateBanner />
       <View style={styles.content}>
         {open ? (
-          <BookScreen book={open} volumes={volumes} library={library} onSelectVolume={setOpen} onBack={() => setOpen(null)} onJump={jump} onPlay={services ? (rows, n) => void play(open, rows, n) : undefined} />
+          <BookScreen book={open} volumes={volumes} library={library} descriptionStore={AsyncStorage} onSelectVolume={setOpen} onBack={() => setOpen(null)} onJump={jump} onPlay={services ? (rows, n) => void play(open, rows, n) : undefined} />
         ) : tab === 'home' ? (
           <HomeScreen email={email} books={books} onOpen={setOpen} />
         ) : tab === 'browse' ? (

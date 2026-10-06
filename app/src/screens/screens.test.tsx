@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { AuthFlowError, type AuthApi } from '../auth/authApi';
 import { createSignInController } from '../auth/signInController';
-import { fixtureBooks, fixtureLibrary } from '../data/fixtures';
+import { fixtureBooks, fixtureLibrary, makeBook } from '../data/fixtures';
 import type { BookListState } from '../data/useBookList';
 import { BookScreen } from './BookScreen';
 import { BrowseScreen } from './BrowseScreen';
@@ -80,8 +80,23 @@ describe('Book', () => {
     expect(onSelectVolume).toHaveBeenCalledWith(vol2);
   });
 
+  it('fetches the description on open (the list does not carry it)', async () => {
+    const book = makeBook({ id: 'a', title: 'A' });
+    const library = fixtureLibrary([makeBook({ id: 'a', title: 'A', description: 'A quiet story.' })]);
+    await render(<BookScreen book={book} volumes={[]} library={library} onSelectVolume={jest.fn()} onBack={jest.fn()} />);
+    expect(await screen.findByText('A quiet story.')).toBeTruthy();
+  });
+
+  it('shows the saved description offline for a book opened before', async () => {
+    const book = makeBook({ id: 'a', title: 'A' });
+    const library = { ...fixtureLibrary([book]), getDescription: async () => Promise.reject(new Error('offline')) };
+    const store = { getItem: async () => 'A quiet story.', setItem: async () => {} };
+    await render(<BookScreen book={book} volumes={[]} library={library} descriptionStore={store} onSelectVolume={jest.fn()} onBack={jest.fn()} />);
+    expect(await screen.findByText('A quiet story.')).toBeTruthy();
+  });
+
   it('offers Retry when chapters cannot be loaded', async () => {
-    const library = { listBooks: async () => [], listChapters: jest.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue([]) };
+    const library = { listBooks: async () => [], getDescription: async () => null, listChapters: jest.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue([]) };
     await render(<BookScreen book={fixtureBooks[2]!} volumes={[]} library={library} onSelectVolume={jest.fn()} onBack={jest.fn()} />);
     await fireEvent.press(await screen.findByText('Retry'));
     expect(await screen.findByText('No chapters are ready yet')).toBeTruthy();
