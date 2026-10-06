@@ -127,7 +127,7 @@ describe('Player seek bar', () => {
 
 describe('Book page with chapters on the phone', () => {
   afterEach(() => jest.useRealTimers());
-  const never = { listBooks: async () => [], listChapters: () => new Promise<never>(() => {}) };
+  const never = { listBooks: async () => [], getDescription: async () => null, listChapters: () => new Promise<never>(() => {}) };
 
   it('shows them at once when offline, without calling the server', async () => {
     const { s, network } = services([1]);
