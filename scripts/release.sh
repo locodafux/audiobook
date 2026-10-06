@@ -8,7 +8,7 @@
 # Config comes from the git-ignored `.env.release` (or the file named by HEARTHREAD_RELEASE_ENV), never the repo:
 #   HEARTHREAD_KEYSTORE            path to the keystore, OUTSIDE this repo (back it up: docs/signing-key-backup.md)
 #   HEARTHREAD_KEYSTORE_PASSWORD, HEARTHREAD_KEY_ALIAS, HEARTHREAD_KEY_PASSWORD
-#   EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY   public values baked into the app
+#   EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, EXPO_PUBLIC_AUDIO_PROXY_URL   public values baked into the app
 # --dry-run checks the config and prints the plan; it builds and publishes nothing.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
@@ -21,7 +21,7 @@ ENV_FILE=${HEARTHREAD_RELEASE_ENV:-.env.release}
 if [ -f "$ENV_FILE" ]; then set -a; . "$ENV_FILE"; set +a; fi
 
 missing=()
-for v in HEARTHREAD_KEYSTORE HEARTHREAD_KEYSTORE_PASSWORD HEARTHREAD_KEY_ALIAS HEARTHREAD_KEY_PASSWORD EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY; do
+for v in HEARTHREAD_KEYSTORE HEARTHREAD_KEYSTORE_PASSWORD HEARTHREAD_KEY_ALIAS HEARTHREAD_KEY_PASSWORD EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_AUDIO_PROXY_URL; do
   [ -n "${!v:-}" ] || missing+=("$v")
 done
 if [ ${#missing[@]} -gt 0 ]; then echo "missing in $ENV_FILE or the environment: ${missing[*]}" >&2; exit 1; fi
