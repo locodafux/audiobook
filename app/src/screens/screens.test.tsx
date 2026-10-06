@@ -202,7 +202,7 @@ describe('Waiting for approval', () => {
 
 describe('Shell', () => {
   it('keeps the Browse search when coming back from a book', async () => {
-    await render(<Shell email="a@b.co" library={fixtureLibrary()} profileApi={{ get: async () => null }} onSignOut={jest.fn()} />);
+    await render(<Shell username="abc" library={fixtureLibrary()} profileApi={{ get: async () => null }} onSignOut={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Browse'));
     await fireEvent.changeText(await screen.findByLabelText('Search books'), 'orchard');
     await fireEvent.press(await screen.findByText('The Quiet Orchard'));
