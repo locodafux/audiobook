@@ -35,7 +35,7 @@ OUT="$ROOT/app/android/app/build/outputs/apk/release"
 GH=${GH:-gh}
 
 echo "release plan: versionCode $CODE -> asset $ASSET on release 'latest'"
-echo "  1. npm ci, expo prebuild (android), gradle assembleRelease (arm64-v8a)"
+echo "  1. npm ci, expo prebuild (android), gradle assembleRelease (arm64-v8a, R8 + resource shrinking)"
 echo "  2. apksigner sign + verify with the keystore outside the repo"
 echo "  3. upload $ASSET to 'latest' (create it if missing), then delete the older assets"
 if [ "$DRY" = 1 ]; then echo "dry run: nothing built or published"; exit 0; fi
@@ -45,7 +45,8 @@ live=$("$GH" release view latest --json assets --jq '.assets[].name' 2>/dev/null
 if [ -n "$live" ] && [ "$CODE" -le "$live" ]; then echo "refusing: latest already has versionCode $live; bump app/app.json" >&2; exit 1; fi
 
 (cd app && npm ci && npx expo prebuild --platform android --clean --no-install)
-(cd app/android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a)
+(cd app/android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a \
+  -Pandroid.enableMinifyInReleaseBuilds=true -Pandroid.enableShrinkResourcesInReleaseBuilds=true)
 
 APKSIGNER=$(ls -d "${ANDROID_HOME:-$HOME/Library/Android/sdk}"/build-tools/*/apksigner | sort -V | tail -1)
 UNSIGNED=$(ls "$OUT"/*.apk | head -1)

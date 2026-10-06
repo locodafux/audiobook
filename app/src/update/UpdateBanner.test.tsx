@@ -3,7 +3,7 @@ import { Linking } from 'react-native';
 
 import { UpdateBanner } from './UpdateBanner';
 
-jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
+jest.mock('@expo/vector-icons/Feather', () => ({ __esModule: true, default: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: jest.requireActual('react-native').View }));
 
 describe('UpdateBanner', () => {

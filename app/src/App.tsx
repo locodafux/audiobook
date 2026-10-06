@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Manrope_500Medium, Manrope_700Bold, Manrope_800ExtraBold } from '@expo-google-fonts/manrope';
-import { Fraunces_700Bold } from '@expo-google-fonts/fraunces';
+// Per-weight imports: the package index would bundle every weight of both families.
+import { Manrope_500Medium } from '@expo-google-fonts/manrope/500Medium';
+import { Manrope_700Bold } from '@expo-google-fonts/manrope/700Bold';
+import { Manrope_800ExtraBold } from '@expo-google-fonts/manrope/800ExtraBold';
+import { Fraunces_700Bold } from '@expo-google-fonts/fraunces/700Bold';
 import { useFonts } from 'expo-font';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';

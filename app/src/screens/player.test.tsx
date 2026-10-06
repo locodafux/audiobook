@@ -16,7 +16,7 @@ import { ServicesProvider, type Services } from '../servicesContext';
 import { BookScreen } from './BookScreen';
 import { PlayerScreen } from './PlayerScreen';
 
-jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
+jest.mock('@expo/vector-icons/Feather', () => ({ __esModule: true, default: () => null }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual('react-native');
   return { SafeAreaView: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };

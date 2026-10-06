@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import Feather from '@expo/vector-icons/Feather';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +30,9 @@ export function BrowseScreen({
         data={entries}
         keyExtractor={(e) => e.key}
         keyboardShouldPersistTaps="handled"
+        windowSize={5}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
         contentContainerStyle={{ paddingBottom: 24, flexGrow: 1 }}
         refreshControl={
           <RefreshControl refreshing={state.status === 'ready' && state.refreshing} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} />
