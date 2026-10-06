@@ -13,6 +13,8 @@ import {
 export interface LibraryApi {
   listBooks(): Promise<BookRow[]>;
   listChapters(bookId: string): Promise<ChapterRow[]>;
+  /** The long description, fetched when a book page opens (the list leaves it out). */
+  getDescription(bookId: string): Promise<string | null>;
 }
 
 export function supabaseLibrary(client: SupabaseClient): LibraryApi {
@@ -31,6 +33,12 @@ export function supabaseLibrary(client: SupabaseClient): LibraryApi {
         if (error) throw error;
         return data;
       }, PAGE_SIZE);
+    },
+
+    async getDescription(bookId) {
+      const { data, error } = await client.from('books').select('description').eq('id', bookId).maybeSingle<{ description: string | null }>();
+      if (error) throw error;
+      return data?.description ?? null;
     },
 
     async listChapters(bookId) {

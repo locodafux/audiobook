@@ -4,7 +4,9 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View }
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Bookmark } from '../bookmarks/bookmarks';
+import { fetchDescription, readSavedDescription } from '../data/description';
 import type { LibraryApi } from '../data/library';
+import type { KeyValueStore } from '../data/offlineList';
 import type { BookRow, ChapterRow } from '../data/types';
 import { toJob } from '../downloads/autoDownload';
 import { downloadedAsRows } from '../downloads/store';
@@ -17,6 +19,8 @@ import { Button, EmptyState } from '../ui/kit';
 import { Segmented } from '../ui/settingsKit';
 import { BookmarksTab } from './BookmarksTab';
 
+const noStore: KeyValueStore = { getItem: async () => null, setItem: async () => {} };
+
 type Chapters = { status: 'loading' } | { status: 'error' } | { status: 'ready'; rows: ChapterRow[] };
 
 /** Book page: cover, facts, volume switcher for a series, and the chapter list. */
@@ -24,6 +28,7 @@ export function BookScreen({
   book,
   volumes,
   library,
+  descriptionStore,
   onSelectVolume,
   onBack,
   onJump = () => {},
@@ -32,6 +37,8 @@ export function BookScreen({
   book: BookRow;
   volumes: BookRow[];
   library: LibraryApi;
+  /** Where the description is kept for offline. Without it the description needs the server every time. */
+  descriptionStore?: KeyValueStore;
   onSelectVolume: (book: BookRow) => void;
   onBack: () => void;
   /** Opens the player at a bookmark (the player owns playback). */
@@ -55,6 +62,20 @@ export function BookScreen({
       live = false;
     };
   }, [library, book.id, key]);
+
+  // The list leaves the long description out: show the copy saved on an earlier visit, then the fresh one.
+  const [about, setAbout] = useState<{ id: string; text: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const show = (text: string | null, saved = false) =>
+      live && text && setAbout((a) => (saved && a?.id === book.id ? a : { id: book.id, text }));
+    if (descriptionStore) void readSavedDescription(descriptionStore, book.id).then((t) => show(t, true));
+    fetchDescription(library, descriptionStore ?? noStore, book.id).then((t) => show(t), () => {});
+    return () => {
+      live = false;
+    };
+  }, [library, descriptionStore, book.id]);
+  const description = book.description || (about?.id === book.id ? about.text : null);
 
   // A result for another book (or an earlier attempt) counts as still loading.
   const offline = services && result?.key === key && !result.rows ? downloadedAsRows(services.downloaded, book.id) : [];
@@ -90,7 +111,7 @@ export function BookScreen({
           ))}
         </View>
       ) : null}
-      {book.description ? <Text style={styles.about}>{book.description}</Text> : null}
+      {description ? <Text style={styles.about}>{description}</Text> : null}
       {services && onPlay && chapters.status === 'ready' ? <Actions services={services} book={book} rows={chapters.rows} onPlay={onPlay} /> : null}
       <View style={{ marginHorizontal: 20, marginTop: 20, marginBottom: 6 }}>
         <Segmented value={tab} options={['chapters', 'bookmarks'] as const} label={(t) => (t === 'chapters' ? 'Chapters' : 'Bookmarks')} onChange={setTab} />

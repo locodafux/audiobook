@@ -8,7 +8,8 @@ export type BookRow = {
   author: string | null;
   series_title: string | null;
   volume: number | null;
-  description: string | null;
+  /** Not in the list select (it is long); the book page fetches it on open. Absent in lists, present in older saved copies. */
+  description?: string | null;
   language: string | null;
   cover_key: string | null;
   chapter_count: number;
@@ -29,7 +30,7 @@ export type ChapterRow = {
 };
 
 export const BOOK_COLUMNS =
-  'id,title,author,series_title,volume,description,language,cover_key,chapter_count,total_duration_s,total_bytes,status';
+  'id,title,author,series_title,volume,language,cover_key,chapter_count,total_duration_s,total_bytes,status';
 
 export const CHAPTER_COLUMNS =
   'book_id,n,title,status,duration_s,bytes,sentence_count,audio_sha256';
