@@ -44,7 +44,7 @@ export default function App() {
       ) : (
         <View style={[styles.fill, styles.center]}>
           <Text style={styles.error}>
-            Missing configuration. Copy .env.example to .env and set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.
+            Missing configuration. Copy .env.example to .env and set EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY and EXPO_PUBLIC_AUDIO_PROXY_URL.
           </Text>
         </View>
       )}
@@ -81,7 +81,7 @@ function SignedInGate({ config }: { config: NonNullable<ReturnType<typeof readCo
   }, [client, controller]);
 
   if (state.name === 'signed_in') {
-    return <SignedIn client={client} username={state.username} library={library} profileApi={profileApi} adminApi={adminApi} onSignOut={() => void controller.signOut()} />;
+    return <SignedIn client={client} audioProxyUrl={config.audioProxyUrl} username={state.username} library={library} profileApi={profileApi} adminApi={adminApi} onSignOut={() => void controller.signOut()} />;
   }
   if (state.name === 'pending') {
     return <PendingScreen username={state.username} onCheck={() => controller.recheckAccess()} onSignOut={() => void controller.signOut()} />;
@@ -93,13 +93,13 @@ function SignedInGate({ config }: { config: NonNullable<ReturnType<typeof readCo
 }
 
 /** Builds the player and downloads once per sign-in, then shows the app. */
-function SignedIn({ client, username, library, profileApi, adminApi, onSignOut }: { client: SupabaseClient; username: string; library: LibraryApi; profileApi: ProfileApi; adminApi: AdminApi; onSignOut: () => void }) {
+function SignedIn({ client, audioProxyUrl, username, library, profileApi, adminApi, onSignOut }: { client: SupabaseClient; audioProxyUrl: string; username: string; library: LibraryApi; profileApi: ProfileApi; adminApi: AdminApi; onSignOut: () => void }) {
   const phone = usePhone();
   const [services, setServices] = useState<Services | null>(null);
   useEffect(() => {
     let live = true;
     let made: Services | null = null;
-    void createServices(client, phone).then((s) => {
+    void createServices(client, phone, audioProxyUrl).then((s) => {
       made = s;
       if (live) setServices(s);
     });
@@ -110,7 +110,7 @@ function SignedIn({ client, username, library, profileApi, adminApi, onSignOut }
       sub.remove();
       made?.player.close();
     };
-  }, [client, phone]);
+  }, [client, phone, audioProxyUrl]);
   if (!services) return null;
   return (
     <ServicesProvider value={services}>

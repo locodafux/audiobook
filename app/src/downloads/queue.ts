@@ -119,6 +119,7 @@ export function createDownloadQueue(deps: QueueDeps): DownloadQueue {
     let lastShown = 0;
     files.remove(`${audio}.part`);
     await files.download(link.audioUrl, `${audio}.part`, {
+      headers: link.headers,
       signal,
       onProgress: (written, total) => {
         const p = total > 0 ? Math.min(1, written / total) : 0;
@@ -133,7 +134,7 @@ export function createDownloadQueue(deps: QueueDeps): DownloadQueue {
       throw new LinksError('unavailable', 'check');
     }
     files.remove(`${timing}.part`);
-    await files.download(link.timingUrl, `${timing}.part`, { signal });
+    await files.download(link.timingUrl, `${timing}.part`, { headers: link.headers, signal });
     files.move(`${audio}.part`, audio);
     files.move(`${timing}.part`, timing);
     downloaded.add({
