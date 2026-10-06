@@ -21,6 +21,16 @@ import { BookmarksTab } from './BookmarksTab';
 
 const noStore: KeyValueStore = { getItem: async () => null, setItem: async () => {} };
 
+/** With chapters already on the phone, how long a book page waits for the server before showing those. */
+const SERVER_WAIT_MS = 3000;
+
+function within<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
 type Chapters = { status: 'loading' } | { status: 'error' } | { status: 'ready'; rows: ChapterRow[] };
 
 /** Book page: cover, facts, volume switcher for a series, and the chapter list. */
@@ -54,14 +64,21 @@ export function BookScreen({
 
   useEffect(() => {
     let live = true;
-    library.listChapters(book.id).then(
+    // Chapters on the phone make the wait pointless when offline (skip the call) or slow (give up after a few seconds).
+    const onPhone = services ? downloadedAsRows(services.downloaded, book.id).length > 0 : false;
+    const fetched = !onPhone
+      ? library.listChapters(book.id)
+      : services?.queue.state.get().blocked === 'offline'
+        ? Promise.reject(new Error('offline'))
+        : within(library.listChapters(book.id), SERVER_WAIT_MS);
+    fetched.then(
       (rows) => live && setResult({ key, rows }),
       () => live && setResult({ key, rows: null }),
     );
     return () => {
       live = false;
     };
-  }, [library, book.id, key]);
+  }, [library, services, book.id, key]);
 
   // The list leaves the long description out: show the copy saved on an earlier visit, then the fresh one.
   const [about, setAbout] = useState<{ id: string; text: string } | null>(null);
@@ -93,7 +110,7 @@ export function BookScreen({
         <Text style={styles.author}>{[book.volume ? `Vol. ${book.volume}` : null, book.author].filter(Boolean).join(' · ')}</Text>
       </View>
       <View style={styles.stats}>
-        <Stat value={formatDuration(book.total_duration_s) || '–'} label="total" />
+        <Stat value={formatDuration(book.total_duration_s) || 'Unknown'} label="total" />
         <Stat value={String(book.chapter_count)} label="chapters" />
       </View>
       {volumes.length > 1 ? (
@@ -203,7 +220,13 @@ function ChapterState({ services: { downloaded, queue }, book, row }: { services
   const job = useStore(queue.state).jobs.find((j) => j.bookId === book.id && j.n === row.n);
   useStore(downloaded.state);
   if (downloaded.has(book.id, row.n)) return <Feather accessibilityLabel="On this phone" name="check-circle" size={18} color={colors.accent} />;
-  if (job?.status === 'failed') return <Feather accessibilityLabel="Download failed, tap to retry" name="alert-circle" size={18} color={colors.danger} onPress={() => queue.retry(book.id, row.n)} />;
+  if (job?.status === 'failed')
+    return (
+      <Pressable accessibilityRole="button" accessibilityLabel="Download failed, tap to retry" onPress={() => queue.retry(book.id, row.n)} hitSlop={8} style={styles.failed}>
+        <Feather name="alert-circle" size={18} color={colors.danger} />
+        <Text style={styles.failedText}>Download failed, tap to retry</Text>
+      </Pressable>
+    );
   if (job) return <Text style={styles.chMeta}>{job.status === 'downloading' ? `${Math.round(job.progress * 100)}%` : 'Waiting'}</Text>;
   return <Feather accessibilityLabel="Download" name="download" size={18} color={colors.muted} onPress={() => queue.enqueue([toJob(book, row)])} />;
 }
@@ -234,5 +257,7 @@ const styles = StyleSheet.create({
   chapter: { flexDirection: 'row', gap: 14, paddingVertical: 10, paddingHorizontal: 20, alignItems: 'center' },
   num: { width: 28, fontFamily: fonts.sansBold, fontSize: 13, color: colors.subtle },
   chTitle: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },
+  failed: { maxWidth: 120, alignItems: 'flex-end', gap: 2 },
+  failedText: { fontFamily: fonts.sans, fontSize: 11, color: colors.danger, textAlign: 'right' },
   chMeta: { fontFamily: fonts.sans, fontSize: 11, color: colors.muted, marginTop: 2 },
 });

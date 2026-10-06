@@ -34,12 +34,26 @@ function Player({ services, onClose }: { services: Services; onClose: () => void
   const [sheet, setSheet] = useState<SheetName>(null);
   const list = useRef<FlatList>(null);
   const [away, setAway] = useState(false); // the reader scrolled away from the current sentence
+  const retried = useRef<number | null>(null); // the sentence whose failed scroll was already retried
+  const retryTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(retryTimer.current), []);
 
   // Follow the voice: keep the current sentence in view unless the reader scrolled elsewhere.
   useEffect(() => {
     if (!p.follow || s.sentenceIndex < 0 || away) return;
+    retried.current = null;
     list.current?.scrollToIndex({ index: s.sentenceIndex, viewPosition: 0.35, animated: true });
   }, [s.sentenceIndex, p.follow, away]);
+
+  // A row that was never drawn (after a seek or resume far down a long chapter) has no known position:
+  // jump to its estimated offset so it gets drawn, then scroll to it properly, once.
+  const scrollFailed = (info: { index: number; averageItemLength: number }) => {
+    if (retried.current === info.index) return;
+    retried.current = info.index;
+    list.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    clearTimeout(retryTimer.current);
+    retryTimer.current = setTimeout(() => list.current?.scrollToIndex({ index: info.index, viewPosition: 0.35, animated: true }), 100);
+  };
 
   const book = s.book;
   const chapter = s.chapters.find((c) => c.n === s.chapterN);
@@ -143,7 +157,7 @@ function Player({ services, onClose }: { services: Services; onClose: () => void
             extraData={`${s.sentenceIndex}:${fontSize}`}
             contentContainerStyle={styles.text}
             onScrollBeginDrag={() => setAway(true)}
-            onScrollToIndexFailed={() => {}}
+            onScrollToIndexFailed={scrollFailed}
             renderItem={({ item, index }) => (
               <Text
                 accessibilityRole="button"

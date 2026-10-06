@@ -254,6 +254,14 @@ describe('Downloads', () => {
     expect(screen.queryByLabelText('Keep the next 3 chapters ready')).toBeNull();
   });
 
+  it('does not say "Starting" when only a failed item is left', async () => {
+    const d = fakeDownloads({ items: [item('6', 'failed', { error: 'Connection reset' })] });
+    await renderWithPhone(<DownloadsScreen ports={ports(d.port, fakeStorage([]).port)} />);
+    await flush();
+    expect(screen.queryByText('Starting…')).toBeNull();
+    expect(screen.getByText('Downloads need a retry')).toBeTruthy();
+  });
+
   it('shows counts, runs queue swipe actions, and retries failures', async () => {
     const d = fakeDownloads({ items: [item('3', 'active', { progress: 0.62 }), item('4', 'queued'), item('5', 'queued'), item('6', 'failed', { error: 'Connection reset' })] });
     await renderWithPhone(<DownloadsScreen ports={ports(d.port, fakeStorage([]).port)} />);

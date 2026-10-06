@@ -109,15 +109,19 @@ export function Shell({
       <View style={styles.content}>
         {open ? (
           <BookScreen book={open} volumes={volumes} library={library} descriptionStore={AsyncStorage} onSelectVolume={setOpen} onBack={() => setOpen(null)} onJump={jump} onPlay={services ? (rows, n) => void play(open, rows, n) : undefined} />
-        ) : tab === 'home' ? (
-          <HomeScreen email={email} books={books} onOpen={setOpen} />
-        ) : tab === 'browse' ? (
-          <BrowseScreen books={books} onOpen={setOpen} />
-        ) : tab === 'downloads' ? (
-          <DownloadsScreen ports={ports} />
-        ) : (
-          <YouFlow email={email} profile={profile} books={list ?? []} storage={ports.storage} onSignOut={onSignOut} />
-        )}
+        ) : null}
+        {/* Kept mounted (just hidden) under a book page so Back returns to the same search and scroll position. */}
+        <View style={[styles.content, open && styles.hidden]}>
+          {tab === 'home' ? (
+            <HomeScreen email={email} books={books} onOpen={setOpen} />
+          ) : tab === 'browse' ? (
+            <BrowseScreen books={books} onOpen={setOpen} />
+          ) : tab === 'downloads' ? (
+            <DownloadsScreen ports={ports} />
+          ) : (
+            <YouFlow email={email} profile={profile} books={list ?? []} storage={ports.storage} onSignOut={onSignOut} />
+          )}
+        </View>
       </View>
       {playerOpen ? null : <MiniPlayer onOpen={() => setPlayerOpen(true)} />}
       <TabBar
@@ -139,4 +143,5 @@ export function Shell({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1 },
+  hidden: { display: 'none' },
 });

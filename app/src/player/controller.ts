@@ -316,7 +316,8 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
     },
     setSleep(timer) {
       setVolume(1);
-      set({ sleep: timer === null ? null : timer === 'chapter' ? { kind: 'chapter' } : sleepIn(timer.minutes, now()), sleepLeftS: null });
+      // A minutes timer shows its full time at once; waiting for the next audio tick left the chip at 0:00 while paused.
+      set({ sleep: timer === null ? null : timer === 'chapter' ? { kind: 'chapter' } : sleepIn(timer.minutes, now()), sleepLeftS: timer && timer !== 'chapter' ? timer.minutes * 60 : null });
     },
     extendSleep() {
       const { sleep } = state.get();
