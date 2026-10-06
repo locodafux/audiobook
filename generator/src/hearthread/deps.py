@@ -7,8 +7,8 @@ from pathlib import Path
 
 from .book import Parser, default_parser
 from .db import Db
-from .r2 import R2, Store
 from .settings import Settings
+from .store import LocalStore, Store
 from .telegram import Backup, Telegram
 from .voice import EdgeVoice, Voice
 
@@ -35,7 +35,7 @@ def build(settings: Settings) -> Deps:
     return Deps(
         settings=s,
         db=Db(s.db_url, max_size=s.chapter_concurrency + 4),
-        store=R2(s.r2_account_id, s.r2_bucket, s.r2_key_id, s.r2_secret),
+        store=LocalStore(Path(s.library_dir) if s.library_dir else home / "library"),
         backup=Telegram(s.telegram_token, s.telegram_chat_id, proxy=s.telegram_proxy),
         voice=EdgeVoice(
             s.voice,

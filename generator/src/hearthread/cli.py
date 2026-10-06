@@ -23,9 +23,9 @@ def _ask(prompt: str) -> bool:
 
 def banner(prod: bool) -> None:
     text = (
-        "PROD: real database, bucket and Telegram chat"
+        "PROD: real database, library folder and Telegram chat"
         if prod
-        else "DEV: dev database, bucket and chat"
+        else "DEV: dev database, library folder and chat"
     )
     if sys.stderr.isatty():
         text = f"\033[1;{'41' if prod else '42'}m {text} \033[0m"
@@ -62,7 +62,7 @@ def doctor(prod: bool) -> int:
     try:
         for name, probe in (
             ("database", lambda: deps.db.one("SELECT 1 AS ok")),
-            ("R2", deps.store.check),
+            ("library folder", deps.store.check),
             (
                 "Supabase admin API",
                 invites.Admin(deps.settings.supabase_url, deps.settings.service_key).check,
@@ -100,12 +100,12 @@ def make_parser() -> argparse.ArgumentParser:
 
     book = (("book",), {})
     yes = (("--yes", "-y"), {"action": "store_true", "help": "skip confirmation prompts"})
-    cmd("doctor", "check settings, database, R2, Telegram, ffmpeg and disk")
+    cmd("doctor", "check settings, database, library folder, Telegram, ffmpeg and disk")
     cmd(
         "add",
         "read an EPUB and queue its chapters",
         (("epub",), {"type": Path}),
-        (("--id",), {"help": "short book id / R2 folder (default: from the title)"}),
+        (("--id",), {"help": "short book id / library folder (default: from the title)"}),
         yes,
     )
     cmd(
@@ -130,8 +130,12 @@ def make_parser() -> argparse.ArgumentParser:
         (("--chapters",), {"help": "e.g. 3-5 or 2,7-9 (default all)"}),
         (("--accept-renumber",), {"action": "store_true"}),
     )
-    cmd("backup-retry", "re-send failed Telegram backups (from R2)")
-    cmd("remove", "delete a book from the list and R2", book, yes)
+    cmd(
+        "backup-retry",
+        "re-upload chapters to Telegram from the library folder",
+        (("--all",), {"action": "store_true", "help": "every ready chapter (Telegram lost files)"}),
+    )
+    cmd("remove", "delete a book from the list and the library folder", book, yes)
     inv = cmd("invite", "manage who may sign in").add_subparsers(dest="invite_cmd", required=True)
     a = inv.add_parser("add", parents=[common], help="invite an email address")
     a.add_argument("email")
@@ -177,7 +181,7 @@ def dispatch(args: argparse.Namespace, deps: Deps, confirm: Callable[[str], bool
     elif c == "regen":
         library.regen(deps, args.book, args.chapters, args.accept_renumber)
     elif c == "backup-retry":
-        print(f"queued {library.backup_retry(deps)} backup jobs")
+        print(f"queued {library.backup_retry(deps, args.all)} uploads")
     elif c == "remove":
         library.remove(deps, args.book, ask)
     elif c == "clean":

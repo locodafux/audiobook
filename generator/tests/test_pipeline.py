@@ -1,4 +1,4 @@
-"""Whole chapter jobs and book commands with fakes for voice, R2 and Telegram (local database)."""
+"""Whole chapter jobs and book commands with fakes for voice, library folder and Telegram (local database)."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def test_add_then_run_makes_every_chapter_ready_and_cleans_up(deps, epub):
     assert {c["status"] for c in ch.values()} == {"ready"}
     c1 = ch[1]
     assert c1["audio_key"] == "books/made-up-tale/ch-0001.mp3" and c1["bytes"] > 0
-    assert c1["sentence_count"] == 4 and c1["backup_status"] == "done" and c1["telegram_audio_msg"]
+    assert c1["sentence_count"] == 4 and c1["telegram_audio_file_id"]
     assert len(deps.store.objects[c1["audio_key"]][0]) == c1["bytes"]
     timing = json.loads(deps.store.objects[c1["timing_key"]][0])
     assert timing["v"] == 1 and len(timing["sentences"]) == 4
@@ -66,7 +66,7 @@ def test_add_then_run_makes_every_chapter_ready_and_cleans_up(deps, epub):
     total = sum(c["bytes"] for c in ch.values())
     assert (b["status"], b["chapter_count"], int(b["total_bytes"])) == ("published", 3, total)
     assert {j["status"] for j in deps.db.q("SELECT status FROM jobs")} == {"done"}
-    # backups: epub + cover at add, then audio + timings per chapter
+    # Telegram: epub + cover at add, then audio + timings per chapter
     assert len(deps.backup.sent) == 2 + 3 * 2
     assert not any(deps.tmp_base.iterdir())  # nothing left on the Mac
 
@@ -90,7 +90,7 @@ def test_add_survives_telegram_outage(deps, epub):
     deps.backup = FakeBackup(fail_times=99)
     msgs = []
     assert library.add(deps, epub, say=msgs.append)
-    assert any("Telegram backup" in m for m in msgs)
+    assert any("Telegram copy" in m for m in msgs)
 
 
 def test_failed_sentence_retries_whole_chapter_then_succeeds(deps, epub, clip):
@@ -122,24 +122,56 @@ def test_chapter_fails_after_three_tries_with_reason_and_others_continue(deps, e
     assert deps.db.one("SELECT status FROM books")["status"] == "published"
 
 
-def test_telegram_failure_keeps_chapter_ready_and_backup_retries(deps, epub):
+def test_telegram_is_a_hard_gate_before_a_chapter_is_ready(deps, epub):
     library.add(deps, epub, say=lambda m: None)
-    deps.backup = FakeBackup(fail_times=2 * 3 * 10, permanent=True)  # every send fails
+    deps.backup = FakeBackup(fail_times=999, permanent=True)  # every send fails
     run_draining(deps)
     ch = chapters(deps.db)
-    assert {c["status"] for c in ch.values()} == {"ready"}  # listening never blocked
-    # permanent errors fail the backup jobs at once, with the reason, and chapters show failed backup
-    assert {c["backup_status"] for c in ch.values()} == {"failed"}
-    jb = deps.db.q("SELECT status, error FROM jobs WHERE kind = 'backup'")
+    assert {c["status"] for c in ch.values()} == {"failed"}  # nothing listenable without Telegram
+    assert {c["telegram_audio_file_id"] for c in ch.values()} == {None}
+    jb = deps.db.q("SELECT status, error FROM jobs WHERE kind = 'chapter'")
     assert len(jb) == 3 and all(
         j["status"] == "failed" and "network down" in j["error"] for j in jb
     )
+    assert deps.db.one("SELECT status FROM books")["status"] == "draft"
+    assert not any(deps.tmp_base.iterdir())
 
     deps.backup = FakeBackup()
-    assert library.backup_retry(deps) == 3
+    assert library.retry(deps, "made-up-tale") == 3
     run_draining(deps)
-    assert {c["backup_status"] for c in chapters(deps.db).values()} == {"done"}
-    assert len(deps.backup.sent) == 6  # audio + timings, taken from R2
+    assert {c["status"] for c in chapters(deps.db).values()} == {"ready"}
+    assert deps.db.one("SELECT status FROM books")["status"] == "published"
+
+
+def test_a_passing_telegram_outage_is_retried_not_failed(deps, epub):
+    library.add(deps, epub, say=lambda m: None)
+    deps.backup = FakeBackup(fail_times=2)  # not permanent: the job backs off and tries again
+    run_draining(deps)
+    assert {c["status"] for c in chapters(deps.db).values()} == {"ready"}
+
+
+def test_chapter_records_where_telegram_holds_each_file(deps, epub):
+    library.add(deps, epub, say=lambda m: None)
+    run_once(deps)
+    c1 = chapters(deps.db)[1]
+    assert c1["telegram_audio_file_id"] and c1["telegram_timing_file_id"]
+    assert c1["telegram_audio_file_id"] != c1["telegram_timing_file_id"]
+    assert c1["telegram_audio_file_unique_id"] and c1["telegram_timing_file_unique_id"]
+    assert c1["backup_status"] == "done" and c1["telegram_audio_msg"] >= 1000
+    assert deps.db.one("SELECT cover_file_id FROM books")["cover_file_id"] == "file-id-2"
+
+
+def test_upload_again_replaces_file_ids_from_the_library_folder(deps, epub):
+    library.add(deps, epub, say=lambda m: None)
+    run_once(deps)
+    before = chapters(deps.db)[2]["telegram_audio_file_id"]
+    assert library.backup_retry(deps) == 0  # nothing failed
+    assert library.backup_retry(deps, everything=True) == 3  # Telegram lost the files
+    sent = len(deps.backup.sent)
+    run_draining(deps)
+    assert len(deps.backup.sent) == sent + 6  # audio + timings, taken from the library folder
+    after = chapters(deps.db)[2]
+    assert after["telegram_audio_file_id"] != before and after["backup_status"] == "done"
     assert not any(deps.tmp_base.iterdir())
 
 
@@ -216,7 +248,7 @@ def test_regen_same_list_remakes_only_requested_chapters(deps, epub):
         library.regen(deps, "made-up-tale", chapters="1-9", say=lambda m: None)
 
 
-def test_remove_asks_twice_and_deletes_everything_in_r2_and_db(deps, epub):
+def test_remove_asks_twice_and_deletes_everything_in_the_library_and_db(deps, epub):
     library.add(deps, epub, say=lambda m: None)
     run_once(deps)
     answers = iter([True, False])

@@ -18,8 +18,8 @@ from .book import (
 )
 from .deps import Deps
 from .pipeline import fetch_and_parse, refresh_totals
-from .r2 import sha256_file
-from .telegram import TelegramError
+from .store import sha256_file
+from .telegram import Sent, TelegramError
 
 CHARS_PER_SECOND = 14.5  # rough narration pace at +0%, only for the estimate shown by `add`
 
@@ -86,16 +86,14 @@ def add(
 
     skey = source_key(book_id)
     deps.store.put_file(skey, epub, "application/epub+zip")
-    ckey = None
-    if parsed.cover:
-        ckey = cover_key(book_id)
-        deps.store.put_bytes(ckey, parsed.cover, "image/jpeg")
-    _telegram_extras(deps, book_id, epub, parsed.cover, say)
+    if parsed.cover:  # kept in the library folder; phones show a gradient until covers are served
+        deps.store.put_bytes(cover_key(book_id), parsed.cover, "image/jpeg")
+    cover_sent = _telegram_extras(deps, book_id, epub, parsed.cover, say)
 
     with db.tx() as conn:
         conn.execute(
             """INSERT INTO books (id, title, author, description, language, series_title, volume,
-                                  cover_key, voice, rate, status, source_key, source_sha256,
+                                  cover_file_id, voice, rate, status, source_key, source_sha256,
                                   parser_version, chapter_count)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'draft', %s, %s, %s, %s)""",
             (
@@ -106,7 +104,7 @@ def add(
                 parsed.language,
                 parsed.series_title,
                 parsed.volume,
-                ckey,
+                cover_sent.file_id if cover_sent else None,
                 deps.settings.voice,
                 deps.settings.rate,
                 skey,
@@ -133,21 +131,24 @@ def add(
     return book_id
 
 
-def _telegram_extras(deps: Deps, book_id: str, epub: Path, cover: bytes | None, say) -> None:
-    """EPUB and cover copies to the backup chat. Best effort: a Telegram outage never blocks `add`."""
+def _telegram_extras(deps: Deps, book_id: str, epub: Path, cover: bytes | None, say) -> Sent | None:
+    """EPUB and cover copies to the chat. Best effort: a Telegram outage never blocks `add`.
+    Returns the cover's upload (its file id is kept on the book), or None."""
 
-    async def go() -> None:
+    async def go() -> Sent | None:
         await deps.backup.send_document(epub, f"{book_id} source EPUB")
-        if cover:
-            with tempfile.TemporaryDirectory() as d:
-                p = Path(d) / f"{book_id}-cover.jpg"
-                p.write_bytes(cover)
-                await deps.backup.send_document(p, f"{book_id} cover")
+        if not cover:
+            return None
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / f"{book_id}-cover.jpg"
+            p.write_bytes(cover)
+            return await deps.backup.send_document(p, f"{book_id} cover")
 
     try:
-        asyncio.run(go())
+        return asyncio.run(go())
     except (TelegramError, OSError) as exc:
-        say(f"warning: Telegram backup of the EPUB/cover failed ({exc}); continuing")
+        say(f"warning: Telegram copy of the EPUB/cover failed ({exc}); continuing")
+        return None
 
 
 # --- status -----------------------------------------------------------------------------------
@@ -185,7 +186,7 @@ def status(deps: Deps, book_id: str | None = None) -> str:
             f'{b["id"]}  "{b["title"]}"  [{b["book_status"]}]  {float(b["bytes"]) / 1e6:.1f} MB\n'
             f"  chapters: {b['ready']}/{b['total']} ready, {working} working, "
             f"{waiting} waiting, {b['failed']} failed\n"
-            f"  backup:   {b['backed_up']} done, {b['backup_failed']} failed, "
+            f"  telegram: {b['backed_up']} done, {b['backup_failed']} failed, "
             f"{mine.get(('backup', 'queued'), 0) + mine.get(('backup', 'running'), 0)} in progress"
         )
     for f in db.q(
@@ -318,7 +319,7 @@ def regen(
             "UPDATE books SET parser_version = %s, chapter_count = %s WHERE id = %s",
             (parsed.parser_version, len(new), book_id),
         )
-        # input_hash NULL = "not what is in R2 any more": the job re-makes it. Ready chapters stay
+        # input_hash NULL = "not what is in the library folder any more": the job re-makes it. Ready chapters stay
         # ready (and listenable) until the new audio overwrites the same keys.
         conn.execute(
             "UPDATE chapters SET input_hash = NULL, status = CASE WHEN status = 'failed'"
@@ -355,19 +356,20 @@ def _renumber_changes(old: list[dict], new: list[tuple[str, str]]) -> list[str]:
 # --- backup-retry / remove --------------------------------------------------------------------
 
 
-def backup_retry(deps: Deps) -> int:
-    """Queue a backup job for every ready chapter whose Telegram copy failed (taken from R2)."""
+def backup_retry(deps: Deps, everything: bool = False) -> int:
+    """Queue a re-upload for every ready chapter whose Telegram copy failed (taken from the library folder)."""
     return deps.db.x(
         """INSERT INTO jobs (book_id, chapter_n, kind)
            SELECT book_id, n, 'backup' FROM chapters
-           WHERE status = 'ready' AND backup_status = 'failed' ON CONFLICT DO NOTHING"""
+           WHERE status = 'ready' AND (%s OR backup_status = 'failed') ON CONFLICT DO NOTHING""",
+        (everything,),
     )
 
 
 def remove(
     deps: Deps, book_id: str, confirm: Callable[[str], bool], say: Callable[[str], None] = print
 ) -> bool:
-    """Delete the book from the list and from R2 (Telegram copies stay). Asks twice."""
+    """Delete the book from the list and the library folder (Telegram copies stay). Asks twice."""
     book = _get_book(deps, book_id)
     live = deps.db.one(
         "SELECT count(*) AS n FROM jobs WHERE book_id = %s AND status = 'running'"
@@ -378,7 +380,7 @@ def remove(
         raise CommandError(
             f"{live} chapters are being worked on; stop the worker or wait, then retry"
         )
-    if not confirm(f"Delete {book['title']!r} ({book_id}) from the list and from R2?"):
+    if not confirm(f"Delete {book['title']!r} ({book_id}) from the list and the library folder?"):
         return False
     if not confirm(f"Really delete {book_id}? This cannot be undone (Telegram copies stay)"):
         return False
