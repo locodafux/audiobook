@@ -13,7 +13,7 @@ import { SignInScreen } from './SignInScreen';
 
 jest.mock('@react-native-async-storage/async-storage', () => jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('../update/UpdateBanner', () => ({ UpdateBanner: () => null }));
-jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
+jest.mock('@expo/vector-icons/Feather', () => ({ __esModule: true, default: () => null }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: ({ children }: { children?: React.ReactNode }) => children ?? null }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual('react-native');

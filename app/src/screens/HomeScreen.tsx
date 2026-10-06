@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,7 +21,8 @@ export function HomeScreen({
   onOpen: (book: BookRow) => void;
 }) {
   const { state, refresh } = books;
-  const entries = state.status === 'ready' ? groupBooks(state.list.books) : [];
+  const list = state.status === 'ready' ? state.list.books : null;
+  const entries = useMemo(() => groupBooks(list ?? []), [list]);
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
       <FlatList
@@ -28,6 +30,9 @@ export function HomeScreen({
         data={entries}
         keyExtractor={(e) => e.key}
         numColumns={2}
+        windowSize={5}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
         columnWrapperStyle={styles.column}
         contentContainerStyle={{ paddingBottom: 24, flexGrow: 1 }}
         refreshControl={
