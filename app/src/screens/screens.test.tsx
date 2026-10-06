@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
+import { Shell } from '../Shell';
+
 import { AuthFlowError, type AuthApi } from '../auth/authApi';
 import { createSignInController } from '../auth/signInController';
 import { fixtureBooks, fixtureLibrary, makeBook } from '../data/fixtures';
@@ -9,6 +11,8 @@ import { BrowseScreen } from './BrowseScreen';
 import { HomeScreen } from './HomeScreen';
 import { SignInScreen } from './SignInScreen';
 
+jest.mock('@react-native-async-storage/async-storage', () => jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+jest.mock('../update/UpdateBanner', () => ({ UpdateBanner: () => null }));
 jest.mock('@expo/vector-icons', () => ({ Feather: () => null }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: ({ children }: { children?: React.ReactNode }) => children ?? null }));
 jest.mock('react-native-safe-area-context', () => {
@@ -137,5 +141,16 @@ describe('Sign-in screen', () => {
     await render(<SignInScreen state={controller.getState()} controller={controller} />);
     expect(screen.getByText('Check your email')).toBeTruthy();
     expect(screen.getByLabelText('6-digit code')).toBeTruthy();
+  });
+});
+
+describe('Shell', () => {
+  it('keeps the Browse search when coming back from a book', async () => {
+    await render(<Shell email="a@b.co" library={fixtureLibrary()} profileApi={{ get: async () => null }} onSignOut={jest.fn()} />);
+    await fireEvent.press(screen.getByLabelText('Browse'));
+    await fireEvent.changeText(await screen.findByLabelText('Search books'), 'orchard');
+    await fireEvent.press(await screen.findByText('The Quiet Orchard'));
+    await fireEvent.press(screen.getByLabelText('Back'));
+    expect(screen.getByLabelText('Search books').props.value).toBe('orchard');
   });
 });

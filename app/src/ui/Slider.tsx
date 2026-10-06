@@ -3,7 +3,9 @@ import { StyleSheet, View, type GestureResponderEvent, type LayoutChangeEvent } 
 
 import { colors } from '../theme';
 
-/** A draggable bar. `value` is 0..1; `onCommit` fires when the finger lifts (a tap seeks too). */
+const STEP = 0.05; // screen-reader increment/decrement: 5% of the bar
+
+/** A draggable bar. `value` is 0..1; `onCommit` fires when the finger lifts (a tap seeks too). Screen readers can step it. */
 export function Slider({ value, onCommit, label }: { value: number; onCommit: (v: number) => void; label: string }) {
   const [width, setWidth] = useState(1);
   const [drag, setDrag] = useState<number | null>(null);
@@ -14,6 +16,11 @@ export function Slider({ value, onCommit, label }: { value: number; onCommit: (v
       accessibilityRole="adjustable"
       accessibilityLabel={label}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(shown * 100) }}
+      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      onAccessibilityAction={(e) => {
+        const dir = e.nativeEvent.actionName === 'increment' ? 1 : e.nativeEvent.actionName === 'decrement' ? -1 : 0;
+        if (dir) onCommit(Math.min(1, Math.max(0, value + dir * STEP)));
+      }}
       onLayout={(e: LayoutChangeEvent) => setWidth(Math.max(1, e.nativeEvent.layout.width))}
       onStartShouldSetResponder={() => true}
       onResponderGrant={(e) => setDrag(at(e))}

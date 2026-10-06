@@ -247,6 +247,15 @@ describe('player', () => {
     expect(t.engine.rate).toBe(3);
   });
 
+  it('a minutes timer shows its full time before any audio tick', async () => {
+    const t = setup();
+    await t.player.open(book, chapters, 1, false);
+    t.player.setSleep({ minutes: 15 });
+    expect(t.player.state.get().sleepLeftS).toBe(900);
+    t.player.setSleep('chapter');
+    expect(t.player.state.get().sleepLeftS).toBeNull();
+  });
+
   it('sleep timer in minutes fades out, then pauses', async () => {
     const t = setup();
     await t.player.open(book, chapters, 1, true);
