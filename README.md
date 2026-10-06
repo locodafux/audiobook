@@ -4,15 +4,15 @@ A small, invite-only audiobook app for friends and family.
 
 **In plain English.** A Mac turns an EPUB into one audio file per chapter and stores them
 in a private Cloudflare R2 bucket (with a cold backup in a private Telegram chat). A tiny
-Supabase database lists the books and chapters and says who is invited. Friends sign in
-with an emailed link or 6-digit code, download chapters straight from R2 through
+Supabase database lists the books and chapters and says who is approved. Friends ask to join
+with a username and password, the admin approves them in the app, then they download chapters straight from R2 through
 short-lived links, and listen offline in an Android app.
 
 This repo is public. It contains code and rules only: no books, no audio, no keys.
 
 ## What is built
 
-- **Android app** (`app/`): invite-only sign-in (email link or code), Home, Browse (search by
+- **Android app** (`app/`): username and password sign-in (new accounts wait for approval; the admin approves, rejects and resets passwords in a Requests screen), Home, Browse (search by
   title, author or series), book page, Downloads and storage, You (stats, bookmarks and notes,
   settings). Chapters download in the background (Wi-Fi only by default, size and SHA-256
   checked) and play offline with lock-screen controls, read-along text, sleep timer, smart
@@ -20,11 +20,15 @@ This repo is public. It contains code and rules only: no books, no audio, no key
   a newer APK from the GitHub release `latest`.
 - **Generator** (`generator/`): the `hearthread` CLI on the Mac. It reads an EPUB, queues
   chapters, voices them (edge-tts), uploads to R2, backs up to Telegram, and publishes books.
-  It is also the admin tool for invites (`invite add | revoke | list`).
+  It also has an older email-invite admin tool (`invite add | revoke | list`); sign-in no longer
+  uses email, so approving people in the app is the way now.
 - **Database** (`supabase/migrations/`): four tables (`members`, `books`, `chapters`, `jobs`)
   with row-level rules: strangers see nothing, revoked members only their own row, active
   members only published books and ready chapters.
-- **Link function** (`supabase/functions/download-links/`): checks the person is still invited
+- **Accounts function** (`supabase/functions/accounts/`): the only way an account is created. It
+  registers a pending member (synthetic internal email, never shown) and lets the admin approve,
+  reject and reset passwords. Public Supabase sign-ups stay off.
+- **Link function** (`supabase/functions/download-links/`): checks the person is still approved
   and returns 15-minute presigned R2 links. It never carries audio.
 - **Release and keep-alive** (`scripts/`): `release.sh` builds and publishes the signed APK;
   a GitHub workflow runs `keepalive.sh` every 3 days so the free Supabase project never idles.
@@ -38,15 +42,15 @@ library and inviting friends. Every part is built and tested locally only.
 |---|---|---|
 | `app/` | Android app ([app/README.md](app/README.md)) | Expo SDK 57, React Native, TypeScript, jest |
 | `generator/` | the `hearthread` CLI ([generator/README.md](generator/README.md)) | Python 3.12, uv, ruff, pytest, ffmpeg |
-| `supabase/` | migrations, pgTAP rule tests, `config.toml`, email template, link function | Postgres, Supabase CLI, Deno |
-| `scripts/` | `release.sh`, `keepalive.sh`, `auth-smoke.sh` and their test | bash |
+| `supabase/` | migrations, pgTAP rule tests, `config.toml`, link and accounts functions | Postgres, Supabase CLI, Deno |
+| `scripts/` | `release.sh`, `keepalive.sh`, `auth-smoke.sh`, `set-admin-login.sh` and their test | bash |
 | `docs/` | decisions, account setup, signing-key backup, spec of the previous app | |
 | `.github/workflows/` | CI (generator, app, scripts, database, link function), secret scan, keep-alive | |
 
 ## Docs
 
 - [docs/decisions.md](docs/decisions.md): what was decided and why
-- [docs/setup-accounts.md](docs/setup-accounts.md): the by-hand account steps (Supabase, R2, Telegram, SMTP)
+- [docs/setup-accounts.md](docs/setup-accounts.md): the by-hand account steps (Supabase, R2, Telegram)
 - [docs/signing-key-backup.md](docs/signing-key-backup.md): create and back up the APK signing key
 - [docs/SPEC.md](docs/SPEC.md): behaviour of the previous app, which Hearthread re-implements from scratch
 
@@ -62,7 +66,7 @@ colima start
 supabase start
 supabase db reset     # applies supabase/migrations from scratch
 supabase test db      # runs supabase/tests (pgTAP)
-scripts/auth-smoke.sh # local sign-in check: stranger refused, code signs in, revoked loses access
+scripts/auth-smoke.sh # local sign-in check: sign-up closed, pending sees nothing, approved sees books
 ```
 
 **App.**
@@ -112,8 +116,7 @@ publishing or using the network.
 
 ## What still needs your accounts
 
-The live Supabase project, R2 buckets and keys, Telegram backup chat, Gmail SMTP sender and the
-`hearthread://auth` redirect are set up by hand: follow [docs/setup-accounts.md](docs/setup-accounts.md).
+The live Supabase project, R2 buckets and keys, Telegram backup chat and the Auth settings are set up by hand: follow [docs/setup-accounts.md](docs/setup-accounts.md).
 The keep-alive workflow does nothing until the `SUPABASE_URL` and `SUPABASE_ANON_KEY` repository
 secrets or variables are set.
 

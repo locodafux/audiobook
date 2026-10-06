@@ -1,16 +1,9 @@
 import { AuthFlowError, type AuthApi } from './authApi';
-import { parseAuthLink } from './authLink';
-import {
-  initialSignInState,
-  normalizeCode,
-  signInReducer,
-  type SignInEvent,
-  type SignInState,
-} from './signInMachine';
 import type { AuthFailure } from './errors';
+import { initialSignInState, signInReducer, type EntryMode, type SignInEvent, type SignInState } from './signInMachine';
+import { normalizeUsername, validateForm } from './username';
 
-const failureOf = (error: unknown): AuthFailure =>
-  error instanceof AuthFlowError ? error.failure : 'unknown';
+const failureOf = (error: unknown): AuthFailure => (error instanceof AuthFlowError ? error.failure : 'unknown');
 
 /** Runs the sign-in state machine against an AuthApi. No React in here, so it is testable. */
 export function createSignInController(api: AuthApi) {
@@ -24,10 +17,25 @@ export function createSignInController(api: AuthApi) {
     listeners.forEach((l) => l());
   };
 
-  /** The session exists; ask whether this member may still use the app. */
-  const finishSignIn = async (email: string) => {
-    dispatch({ type: 'SESSION_STARTED', email });
+  /** The session exists; ask whether this member is approved. */
+  const finishSignIn = async (username: string) => {
+    dispatch({ type: 'SESSION_STARTED', username });
     dispatch({ type: 'ACCESS_RESULT', status: await api.checkAccess() });
+  };
+
+  /** Validates, runs `go` (register and/or sign in) and finishes the sign-in. `confirm` is null for log in. */
+  const submit = async (rawUsername: string, password: string, confirm: string | null, go: (username: string) => Promise<void>) => {
+    if (state.name !== 'entry' || state.busy) return;
+    const username = normalizeUsername(rawUsername);
+    const invalid = validateForm(username, password, confirm);
+    if (invalid) return dispatch({ type: 'FAILED', error: invalid });
+    dispatch({ type: 'SUBMIT' });
+    try {
+      await go(username);
+    } catch (error) {
+      return dispatch({ type: 'FAILED', error: failureOf(error) });
+    }
+    await finishSignIn(username);
   };
 
   return {
@@ -40,60 +48,20 @@ export function createSignInController(api: AuthApi) {
     /** Reads the stored session. Offline, the stored session is trusted. */
     async start() {
       const session = await api.restoreSession().catch(() => null);
-      dispatch({ type: 'RESTORED', email: session?.email ?? null });
+      dispatch({ type: 'RESTORED', username: session?.username ?? null });
       if (session) dispatch({ type: 'ACCESS_RESULT', status: await api.checkAccess() });
     },
 
-    setEmail: (email: string) => dispatch({ type: 'EMAIL_CHANGED', email }),
+    setMode: (mode: EntryMode) => dispatch({ type: 'MODE', mode }),
 
-    /** Also used to resend and to retry after offline / not invited / expired. */
-    async submitEmail() {
-      dispatch({ type: 'SUBMIT_EMAIL' });
-      if (state.name !== 'sending') return;
-      try {
-        await api.requestCode(state.email);
-        dispatch({ type: 'REQUEST_OK' });
-      } catch (error) {
-        dispatch({ type: 'REQUEST_FAILED', failure: failureOf(error) });
-      }
-    },
+    logIn: (username: string, password: string) => submit(username, password, null, (u) => api.signIn(u, password)),
 
-    async submitCode(rawCode: string) {
-      const code = normalizeCode(rawCode);
-      if (state.name !== 'sent' || code.length !== 6) return;
-      const { email } = state;
-      dispatch({ type: 'SUBMIT_CODE' });
-      try {
-        await api.verifyCode(email, code);
-      } catch (error) {
-        dispatch({ type: 'CODE_FAILED', failure: failureOf(error) });
-        return;
-      }
-      await finishSignIn(email);
-    },
-
-    /** Call with every URL the app is opened with; non-auth URLs are ignored. */
-    async openLink(url: string | null | undefined) {
-      const link = parseAuthLink(url);
-      if (!link) return;
-      dispatch({ type: 'LINK_RECEIVED' });
-      if (state.name !== 'signing_in') return;
-      const { email } = state;
-      if (link.type === 'error') {
-        dispatch({ type: 'LINK_FAILED', reason: link.reason });
-        return;
-      }
-      try {
-        await api.exchangeLinkCode(link.code);
-      } catch (error) {
-        dispatch({ type: 'LINK_FAILED', reason: failureOf(error) === 'expired' ? 'expired' : 'invalid' });
-        return;
-      }
-      const session = await api.restoreSession().catch(() => null);
-      await finishSignIn(session?.email ?? email);
-    },
-
-    useOtherEmail: () => dispatch({ type: 'USE_OTHER_EMAIL' }),
+    /** Creates a pending account, then signs in so the person lands on "waiting for approval". */
+    register: (username: string, password: string, confirm: string) =>
+      submit(username, password, confirm, async (u) => {
+        await api.register(u, password);
+        await api.signIn(u, password);
+      }),
 
     async signOut() {
       await api.signOut().catch(() => {});
@@ -101,11 +69,11 @@ export function createSignInController(api: AuthApi) {
     },
 
     /** The session vanished while signed in (refresh token refused or removed). */
-    sessionLost: () => state.name === 'signed_in' && dispatch({ type: 'SIGNED_OUT' }),
+    sessionLost: () => (state.name === 'signed_in' || state.name === 'pending') && dispatch({ type: 'SIGNED_OUT' }),
 
-    /** Asks again whether this member may still use the app (for example when the app comes to the foreground). */
+    /** Asks again whether this member is approved (when the app comes to the foreground, or "Check again"). */
     async recheckAccess() {
-      if (state.name !== 'signed_in') return;
+      if (state.name !== 'signed_in' && state.name !== 'pending') return;
       dispatch({ type: 'ACCESS_RESULT', status: await api.checkAccess() });
     },
 

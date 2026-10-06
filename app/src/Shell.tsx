@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 
+import type { AdminApi } from './admin/adminApi';
 import type { LibraryApi } from './data/library';
 import type { BookRow, ChapterRow } from './data/types';
 import { useBookList } from './data/useBookList';
@@ -27,16 +28,18 @@ import { UpdateBanner } from './update/UpdateBanner';
  * and settings screens arrive and need deep links of their own.
  */
 export function Shell({
-  email,
+  username,
   library,
   profileApi,
+  adminApi,
   ports: portsProp,
   onJumpToBookmark,
   onSignOut,
 }: {
-  email: string;
+  username: string;
   library: LibraryApi;
   profileApi: ProfileApi;
+  adminApi?: AdminApi;
   /** The download queue and file storage. Defaults to the real ones from the services, else the stub's empty states. */
   ports?: PhonePorts;
   /** Opens the player at a bookmark. Defaults to the real player. */
@@ -113,13 +116,13 @@ export function Shell({
         {/* Kept mounted (just hidden) under a book page so Back returns to the same search and scroll position. */}
         <View style={[styles.content, open && styles.hidden]}>
           {tab === 'home' ? (
-            <HomeScreen email={email} books={books} onOpen={setOpen} />
+            <HomeScreen username={username} books={books} onOpen={setOpen} />
           ) : tab === 'browse' ? (
             <BrowseScreen books={books} onOpen={setOpen} />
           ) : tab === 'downloads' ? (
             <DownloadsScreen ports={ports} />
           ) : (
-            <YouFlow email={email} profile={profile} books={list ?? []} storage={ports.storage} onSignOut={onSignOut} />
+            <YouFlow username={username} profile={profile} adminApi={adminApi} books={list ?? []} storage={ports.storage} onSignOut={onSignOut} />
           )}
         </View>
       </View>

@@ -27,12 +27,12 @@ rework research). Approved by the captain on 2026-10-02 ("looks good").
 - No views, no always-on server, no persistent sentence cache.
 
 ## Sign-in
-- Invite-only, no passwords: email link plus 6-digit code, PKCE, OTP expiry 900 s.
-- Sign-ups disabled in Supabase Auth, so invite-only is enforced by the server, not the app.
-- Custom SMTP (Gmail app password): Supabase's built-in sender only reaches project team
-  members at 2 emails/hour.
-- Revoke = `members.status = 'revoked'` plus an auth ban; downloaded files stay on the phone, locked.
-- Redirect URL: `hearthread://auth`.
+- Username and password. No email, magic link or code anywhere (this replaced the earlier email link and 6-digit code).
+- A new account is `pending` and sees nothing (every database rule and the link function require `active`) until the admin approves it in the app.
+- The `accounts` function creates accounts (service role, synthetic internal email `<username>@users.hearthread.invalid`, pre-confirmed), so public sign-ups stay disabled and no mail is sent. Login itself goes straight to Supabase Auth, so its per-IP rate limit protects it.
+- Admin (`members.is_admin`, checked on the server): approve, reject and reset a member's password. No email reset exists; a forgotten password is fixed by the admin.
+- Reject or revoke = `members.status = 'revoked'`; downloaded files stay on the phone, locked.
+- The session stays stored on the phone, so the app still opens offline.
 
 ## Database access rules
 | Who | members | books | chapters | jobs |
@@ -63,7 +63,7 @@ rework research). Approved by the captain on 2026-10-02 ("looks good").
   controls, theme and accent, in-app updates.
 - Bookmarks, stats, settings and positions are phone-only in v1.
 - When access ends or on sign-out: keep downloaded files, app locked until sign-in.
-- Invite-only message: explicit "not on the invite list".
+- Pending message: "Waiting for approval"; rejected: "not approved".
 - Swipe-left row actions on storage, queue and bookmark rows.
 
 ## Build order

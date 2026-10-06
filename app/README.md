@@ -1,6 +1,6 @@
 # Hearthread app
 
-Android app (Expo SDK 57, TypeScript). Package `com.locodafux.hearthread`, deep-link scheme `hearthread` (sign-in redirect `hearthread://auth`).
+Android app (Expo SDK 57, TypeScript). Package `com.locodafux.hearthread`, sign-in by username and password (no email, no deep link).
 
 ```
 cp .env.example .env      # set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (public values only)

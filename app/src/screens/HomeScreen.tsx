@@ -12,11 +12,11 @@ import { CachedPill, LibraryError } from './LibraryStatus';
 
 /** The library: every published book as a cover grid, series folded into one tile. */
 export function HomeScreen({
-  email,
+  username,
   books,
   onOpen,
 }: {
-  email: string;
+  username: string;
   books: { state: BookListState; refresh: () => void };
   onOpen: (book: BookRow) => void;
 }) {
@@ -40,7 +40,7 @@ export function HomeScreen({
         }
         ListHeaderComponent={
           <>
-            <ScreenTitle sub={email}>Home</ScreenTitle>
+            <ScreenTitle sub={username}>Home</ScreenTitle>
             <CachedPill state={state} />
           </>
         }

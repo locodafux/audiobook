@@ -44,6 +44,7 @@ export function Field({ label, error, ...input }: TextInputProps & { label: stri
       <TextInput
         placeholderTextColor={colors.subtle}
         selectionColor={colors.accent}
+        accessibilityLabel={label}
         {...input}
         style={[styles.field, error && { borderColor: colors.danger }, input.style]}
       />

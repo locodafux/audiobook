@@ -11,18 +11,18 @@ import { colors, fonts } from '../theme';
 import { Button, ScreenTitle } from '../ui/kit';
 import { ConfirmDialog, Group, Row } from '../ui/settingsKit';
 
-export type YouRoute = 'stats' | 'playback' | 'downloads' | 'appearance';
+export type YouRoute = 'stats' | 'playback' | 'downloads' | 'appearance' | 'admin';
 
 const DAYS = 'MTWTFSS';
 
 /** You: who you are, this week's listening, and the settings pages (wireframes G1, G7). */
 export function YouScreen({
-  email,
+  username,
   profile,
   onSignOut,
   onOpen,
 }: {
-  email: string;
+  username: string;
   profile: Profile | null;
   onSignOut: () => void;
   onOpen: (route: YouRoute) => void;
@@ -32,7 +32,7 @@ export function YouScreen({
   const [now] = useState(() => new Date());
   const week = summarize(useStore(stats), now);
   const [confirmOut, setConfirmOut] = useState(false);
-  const name = profile?.displayName || email;
+  const name = profile?.displayName || username;
   const peak = Math.max(...week.weekBars, 1);
 
   return (
@@ -48,7 +48,7 @@ export function YouScreen({
               {name}
             </Text>
             <Text numberOfLines={1} style={styles.email}>
-              {[email, profile?.invitedBy ? `invited by ${profile.invitedBy}` : null].filter(Boolean).join(' · ')}
+              {[`@${username}`, profile?.invitedBy ? `invited by ${profile.invitedBy}` : null].filter(Boolean).join(' · ')}
             </Text>
           </View>
         </View>
@@ -82,6 +82,12 @@ export function YouScreen({
           />
           <Row icon="type" title="Reading & appearance" sub={`${themeLabel(s.theme)} · ${accentLabel(s.accent)}`} onPress={() => onOpen('appearance')} />
         </Group>
+
+        {profile?.isAdmin ? (
+          <Group title="Admin">
+            <Row icon="user-check" title="Requests" sub="Approve new people, reset a password" onPress={() => onOpen('admin')} />
+          </Group>
+        ) : null}
 
         <View style={{ marginHorizontal: 20, marginTop: 18 }}>
           <Button label="Sign out" variant="ghost" icon="log-out" onPress={() => setConfirmOut(true)} />

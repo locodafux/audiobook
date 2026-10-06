@@ -1,6 +1,6 @@
 # download-links
 
-Supabase Edge Function (Deno). A signed-in, still-invited member sends a book and chapter numbers;
+Supabase Edge Function (Deno). A signed-in, approved (active) member sends a book and chapter numbers;
 the function replies with 15-minute presigned R2 links. It never carries audio.
 
 **Request** (`POST`, `Authorization: Bearer <member token>`), one of:

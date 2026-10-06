@@ -1,9 +1,9 @@
 import { AuthFlowError, type AccessStatus, type AuthApi } from './authApi';
-import { parseAuthLink } from './authLink';
 import { classifyAuthError } from './errors';
 import { chunkedSecureStorage, type SecureStoreLike } from './secureStorage';
 import { createSignInController } from './signInController';
 import { signInReducer, type SignInEvent, type SignInState } from './signInMachine';
+import { emailFor, usernameFrom, validateForm } from './username';
 
 type FakeApi = AuthApi & { calls: string[] };
 
@@ -17,9 +17,8 @@ const fakeApi = (over: Partial<AuthApi> = {}): FakeApi => {
     };
   return {
     calls,
-    requestCode: rec('requestCode', async () => {}),
-    verifyCode: rec('verifyCode', async () => {}),
-    exchangeLinkCode: rec('exchangeLinkCode', async () => {}),
+    register: rec('register', async () => {}),
+    signIn: rec('signIn', async () => {}),
     restoreSession: async () => null,
     checkAccess: async (): Promise<AccessStatus> => 'active',
     signOut: rec('signOut', async () => {}),
@@ -29,209 +28,212 @@ const fakeApi = (over: Partial<AuthApi> = {}): FakeApi => {
 const reject = (failure: ConstructorParameters<typeof AuthFlowError>[0]) => async () => {
   throw new AuthFlowError(failure);
 };
+const entry = (extra: Partial<Extract<SignInState, { name: 'entry' }>> = {}): SignInState => ({ name: 'entry', mode: 'login', busy: false, ...extra });
+
+describe('username', () => {
+  it('maps a username to the internal address and back', () => {
+    expect(emailFor('maria_7')).toBe('maria_7@users.hearthread.invalid');
+    expect(usernameFrom(emailFor('maria_7'))).toBe('maria_7');
+  });
+
+  it('checks the form before anything is sent', () => {
+    expect(validateForm('ab', 'longenough', null)).toBe('username_invalid');
+    expect(validateForm('has space', 'longenough', null)).toBe('username_invalid');
+    expect(validateForm('maria', 'x', null)).toBeNull(); // log in: the server judges the password
+    expect(validateForm('maria', 'short', 'short')).toBe('password_short');
+    expect(validateForm('maria', 'longenough', 'different1')).toBe('password_mismatch');
+    expect(validateForm('maria', 'longenough', 'longenough')).toBeNull();
+  });
+});
 
 describe('signInReducer', () => {
-  const run = (events: SignInEvent[], from: SignInState = { name: 'restoring' }) =>
-    events.reduce(signInReducer, from);
+  const run = (events: SignInEvent[], from: SignInState = { name: 'restoring' }) => events.reduce(signInReducer, from);
 
-  it('goes to entry when there is no stored session', () => {
-    expect(run([{ type: 'RESTORED', email: null }])).toEqual({ name: 'entry', email: '' });
+  it('goes to log in when there is no stored session', () => {
+    expect(run([{ type: 'RESTORED', username: null }])).toEqual(entry());
   });
 
   it('trusts a stored session', () => {
-    expect(run([{ type: 'RESTORED', email: 'a@b.co' }])).toEqual({ name: 'signed_in', email: 'a@b.co' });
+    expect(run([{ type: 'RESTORED', username: 'ana' }])).toEqual({ name: 'signed_in', username: 'ana' });
   });
 
-  it('rejects a malformed email without sending', () => {
-    const s = run([{ type: 'RESTORED', email: null }, { type: 'EMAIL_CHANGED', email: 'nope' }, { type: 'SUBMIT_EMAIL' }]);
-    expect(s).toEqual({ name: 'entry', email: 'nope', error: 'invalid_email' });
-  });
-
-  it('lowercases and trims the email when sending', () => {
-    const s = run([{ type: 'RESTORED', email: null }, { type: 'EMAIL_CHANGED', email: '  Ana@Mail.COM ' }, { type: 'SUBMIT_EMAIL' }]);
-    expect(s).toEqual({ name: 'sending', email: 'ana@mail.com' });
+  it('switches between log in and register, but not while a request is running', () => {
+    expect(run([{ type: 'MODE', mode: 'register' }], entry())).toEqual(entry({ mode: 'register' }));
+    const busy = entry({ busy: true });
+    expect(signInReducer(busy, { type: 'MODE', mode: 'register' })).toBe(busy);
   });
 
   it.each([
-    ['not_invited', { name: 'not_invited', email: 'a@b.co' }],
-    ['offline', { name: 'offline', email: 'a@b.co' }],
-    ['rate_limited', { name: 'entry', email: 'a@b.co', error: 'rate_limited' }],
-    ['unknown', { name: 'entry', email: 'a@b.co', error: 'failed' }],
-  ] as const)('maps a %s send failure', (failure, expected) => {
-    expect(signInReducer({ name: 'sending', email: 'a@b.co' }, { type: 'REQUEST_FAILED', failure })).toEqual(expected);
+    ['invalid_login', 'invalid_login'],
+    ['username_taken', 'username_taken'],
+    ['registration_full', 'registration_full'],
+    ['rate_limited', 'rate_limited'],
+    ['offline', 'offline'],
+    ['banned', 'invalid_login'],
+    ['unknown', 'failed'],
+    ['password_mismatch', 'password_mismatch'],
+  ] as const)('shows %s as %s on the form and lets the person retry', (failure, shown) => {
+    expect(signInReducer(entry({ busy: true }), { type: 'FAILED', error: failure })).toEqual(entry({ error: shown }));
   });
 
-  it('ignores a late result after the user moved on', () => {
-    const entry: SignInState = { name: 'entry', email: '' };
-    expect(signInReducer(entry, { type: 'REQUEST_OK' })).toBe(entry);
+  it('ignores a late result after the person moved on', () => {
+    const signedIn: SignInState = { name: 'signed_in', username: 'ana' };
+    expect(signInReducer(signedIn, { type: 'FAILED', error: 'offline' })).toBe(signedIn);
+    expect(signInReducer(signedIn, { type: 'SESSION_STARTED', username: 'ana' })).toBe(signedIn);
   });
 
   it('keeps the revoked verdict even if a session start arrives later', () => {
     const ended: SignInState = { name: 'access_ended' };
-    expect(signInReducer(ended, { type: 'SESSION_STARTED', email: 'a@b.co' })).toBe(ended);
+    expect(signInReducer(ended, { type: 'SESSION_STARTED', username: 'ana' })).toBe(ended);
+    expect(signInReducer(ended, { type: 'ACCESS_RESULT', status: 'active' })).toBe(ended);
   });
 
-  it('unknown access (offline) still signs in', () => {
-    const s = signInReducer({ name: 'signing_in', email: 'a@b.co' }, { type: 'ACCESS_RESULT', status: 'unknown' });
-    expect(s).toEqual({ name: 'signed_in', email: 'a@b.co' });
+  it('a pending result means waiting for approval; an active one lets them in', () => {
+    const signing: SignInState = { name: 'signing_in', username: 'ana' };
+    const pending = signInReducer(signing, { type: 'ACCESS_RESULT', status: 'pending' });
+    expect(pending).toEqual({ name: 'pending', username: 'ana' });
+    expect(signInReducer(pending, { type: 'ACCESS_RESULT', status: 'active' })).toEqual({ name: 'signed_in', username: 'ana' });
   });
 
-  it('a revoked check ends access even when already signed in', () => {
-    const s = signInReducer({ name: 'signed_in', email: 'a@b.co' }, { type: 'ACCESS_RESULT', status: 'revoked' });
-    expect(s).toEqual({ name: 'access_ended' });
+  it('unknown access (offline) signs in a stored session but never approves a pending member', () => {
+    expect(signInReducer({ name: 'signing_in', username: 'ana' }, { type: 'ACCESS_RESULT', status: 'unknown' })).toEqual({ name: 'signed_in', username: 'ana' });
+    const pending: SignInState = { name: 'pending', username: 'ana' };
+    expect(signInReducer(pending, { type: 'ACCESS_RESULT', status: 'unknown' })).toBe(pending);
   });
 
-  it('a failed link with no known email returns to entry with a hint', () => {
-    const s = signInReducer({ name: 'signing_in', email: '' }, { type: 'LINK_FAILED', reason: 'expired' });
-    expect(s).toEqual({ name: 'entry', email: '', error: 'link_expired' });
+  it('a revoked check ends access even when already signed in or pending', () => {
+    expect(signInReducer({ name: 'signed_in', username: 'ana' }, { type: 'ACCESS_RESULT', status: 'revoked' })).toEqual({ name: 'access_ended' });
+    expect(signInReducer({ name: 'pending', username: 'ana' }, { type: 'ACCESS_RESULT', status: 'revoked' })).toEqual({ name: 'access_ended' });
+  });
+
+  it('an access result with nobody signed in changes nothing', () => {
+    const e = entry();
+    expect(signInReducer(e, { type: 'ACCESS_RESULT', status: 'pending' })).toBe(e);
   });
 });
 
 describe('createSignInController', () => {
-  it('signs in with the emailed code, then checks access', async () => {
+  it('logs in with a normalized username, then checks access', async () => {
     const api = fakeApi();
     const c = createSignInController(api);
     await c.start();
-    c.setEmail('Ana@Mail.com');
-    await c.submitEmail();
-    expect(c.getState()).toEqual({ name: 'sent', email: 'ana@mail.com', verifying: false });
-    await c.submitCode('481 207');
-    expect(api.calls).toContain('verifyCode:ana@mail.com,481207');
-    expect(c.getState()).toEqual({ name: 'signed_in', email: 'ana@mail.com' });
+    await c.logIn('  Ana_1 ', 'secret-pass');
+    expect(api.calls).toEqual(['signIn:ana_1,secret-pass']);
+    expect(c.getState()).toEqual({ name: 'signed_in', username: 'ana_1' });
   });
 
-  it('a stranger lands on the invite-list message', async () => {
-    const c = createSignInController(fakeApi({ requestCode: reject('not_invited') }));
-    await c.start();
-    c.setEmail('dave@yahoo.com');
-    await c.submitEmail();
-    expect(c.getState()).toEqual({ name: 'not_invited', email: 'dave@yahoo.com' });
-    c.useOtherEmail();
-    expect(c.getState()).toEqual({ name: 'entry', email: '' });
-  });
-
-  it('a wrong code stays on the code screen with an error, and can retry', async () => {
+  it('a wrong password stays on the form with a message, and can retry', async () => {
     let first = true;
     const c = createSignInController(
       fakeApi({
-        verifyCode: async () => {
+        signIn: async () => {
           if (first) {
             first = false;
-            throw new AuthFlowError('invalid');
+            throw new AuthFlowError('invalid_login');
           }
         },
       }),
     );
     await c.start();
-    c.setEmail('a@b.co');
-    await c.submitEmail();
-    await c.submitCode('123456');
-    expect(c.getState()).toEqual({ name: 'sent', email: 'a@b.co', verifying: false, error: 'invalid' });
-    await c.submitCode('123456');
+    await c.logIn('ana', 'wrong');
+    expect(c.getState()).toEqual(entry({ error: 'invalid_login' }));
+    await c.logIn('ana', 'right-pass');
     expect(c.getState().name).toBe('signed_in');
   });
 
-  it('ignores a code that is not six digits', async () => {
+  it('does not call the server for a username that cannot exist', async () => {
     const api = fakeApi();
     const c = createSignInController(api);
     await c.start();
-    c.setEmail('a@b.co');
-    await c.submitEmail();
-    await c.submitCode('12345');
-    expect(api.calls.some((x) => x.startsWith('verifyCode'))).toBe(false);
+    await c.logIn('a', 'whatever');
+    expect(c.getState()).toEqual(entry({ error: 'username_invalid' }));
+    expect(api.calls).toEqual([]);
   });
 
-  it('signs in from a PKCE link, even on a cold start', async () => {
-    let signedIn = false;
-    const api = fakeApi({
-      exchangeLinkCode: async () => void (signedIn = true),
-      restoreSession: async () => (signedIn ? { email: 'ana@mail.com' } : null),
-    });
+  it('registering creates the account, signs in and lands on waiting for approval', async () => {
+    const api = fakeApi({ checkAccess: async () => 'pending' });
     const c = createSignInController(api);
     await c.start();
-    await c.openLink('hearthread://auth?code=abc123');
-    expect(c.getState()).toEqual({ name: 'signed_in', email: 'ana@mail.com' });
+    c.setMode('register');
+    await c.register('Maria', 'longenough1', 'longenough1');
+    expect(api.calls).toEqual(['register:maria,longenough1', 'signIn:maria,longenough1']);
+    expect(c.getState()).toEqual({ name: 'pending', username: 'maria' });
   });
 
-  it('shows the expired state for a used link when the email is known, and resends', async () => {
-    const c = createSignInController(fakeApi({ exchangeLinkCode: reject('expired') }));
+  it('registering checks the passwords first', async () => {
+    const api = fakeApi();
+    const c = createSignInController(api);
     await c.start();
-    c.setEmail('ana@mail.com');
-    await c.submitEmail();
-    await c.openLink('hearthread://auth?code=old');
-    expect(c.getState()).toEqual({ name: 'link_expired', email: 'ana@mail.com' });
-    await c.submitEmail();
-    expect(c.getState().name).toBe('sent');
+    c.setMode('register');
+    await c.register('maria', 'longenough1', 'longenough2');
+    expect(c.getState()).toEqual(entry({ mode: 'register', error: 'password_mismatch' }));
+    await c.register('maria', 'short', 'short');
+    expect(c.getState()).toEqual(entry({ mode: 'register', error: 'password_short' }));
+    expect(api.calls).toEqual([]);
   });
 
-  it('ignores links that are not auth links', async () => {
-    const c = createSignInController(fakeApi());
+  it('a taken username stays on the register form and signs nobody in', async () => {
+    const api = fakeApi({ register: reject('username_taken') });
+    const c = createSignInController(api);
     await c.start();
-    await c.openLink('hearthread://other');
-    await c.openLink(null);
-    expect(c.getState()).toEqual({ name: 'entry', email: '' });
+    c.setMode('register');
+    await c.register('maria', 'longenough1', 'longenough1');
+    expect(c.getState()).toEqual(entry({ mode: 'register', error: 'username_taken' }));
+    expect(api.calls.some((x) => x.startsWith('signIn'))).toBe(false);
   });
 
-  it('a revoked member lands on "access ended" and can sign out', async () => {
-    const api = fakeApi({ restoreSession: async () => ({ email: 'a@b.co' }), checkAccess: async () => 'revoked' });
+  it('an offline log in says so', async () => {
+    const c = createSignInController(fakeApi({ signIn: reject('offline') }));
+    await c.start();
+    await c.logIn('ana', 'secret-pass');
+    expect(c.getState()).toEqual(entry({ error: 'offline' }));
+  });
+
+  it('a pending member is approved on the next check', async () => {
+    let status: AccessStatus = 'pending';
+    const c = createSignInController(fakeApi({ restoreSession: async () => ({ username: 'ana' }), checkAccess: async () => status }));
+    await c.start();
+    expect(c.getState()).toEqual({ name: 'pending', username: 'ana' });
+    await c.recheckAccess();
+    expect(c.getState().name).toBe('pending');
+    status = 'active';
+    await c.recheckAccess();
+    expect(c.getState()).toEqual({ name: 'signed_in', username: 'ana' });
+  });
+
+  it('a rejected member lands on "access ended" and can sign out', async () => {
+    const api = fakeApi({ restoreSession: async () => ({ username: 'ana' }), checkAccess: async () => 'revoked' });
     const c = createSignInController(api);
     await c.start();
     expect(c.getState()).toEqual({ name: 'access_ended' });
     await c.signOut();
     expect(api.calls).toContain('signOut:');
-    expect(c.getState()).toEqual({ name: 'entry', email: '' });
+    expect(c.getState()).toEqual(entry());
   });
 
   it('opens signed in when offline at launch (stored session trusted)', async () => {
-    const c = createSignInController(
-      fakeApi({ restoreSession: async () => ({ email: 'a@b.co' }), checkAccess: async () => 'unknown' }),
-    );
+    const c = createSignInController(fakeApi({ restoreSession: async () => ({ username: 'ana' }), checkAccess: async () => 'unknown' }));
     await c.start();
-    expect(c.getState()).toEqual({ name: 'signed_in', email: 'a@b.co' });
+    expect(c.getState()).toEqual({ name: 'signed_in', username: 'ana' });
   });
 
-  it('notifies subscribers only when the state changes', async () => {
-    const c = createSignInController(fakeApi());
-    const seen: string[] = [];
-    c.subscribe(() => seen.push(c.getState().name));
+  it('losing the session sends a signed-in or pending member back to log in', async () => {
+    const c = createSignInController(fakeApi({ restoreSession: async () => ({ username: 'ana' }) }));
     await c.start();
-    c.setEmail('x');
-    expect(seen).toEqual(['entry', 'entry']);
-  });
-});
-
-describe('parseAuthLink', () => {
-  it('reads the PKCE code', () => {
-    expect(parseAuthLink('hearthread://auth?code=abc-1')).toEqual({ type: 'code', code: 'abc-1' });
-  });
-  it('reads an expired-link error from query or fragment', () => {
-    const expected = { type: 'error', reason: 'expired' };
-    expect(parseAuthLink('hearthread://auth?error=access_denied&error_code=otp_expired')).toEqual(expected);
-    expect(parseAuthLink('hearthread://auth#error=access_denied&error_code=otp_expired')).toEqual(expected);
-  });
-  it('treats other errors as invalid', () => {
-    expect(parseAuthLink('hearthread://auth?error=server_error')).toEqual({ type: 'error', reason: 'invalid' });
-  });
-  it('ignores everything else', () => {
-    expect(parseAuthLink('hearthread://auth')).toBeNull();
-    expect(parseAuthLink('https://evil.example/auth?code=x')).toBeNull();
-    expect(parseAuthLink('hearthread://authx?code=x')).toBeNull();
-    expect(parseAuthLink(undefined)).toBeNull();
+    c.sessionLost();
+    expect(c.getState()).toEqual(entry());
   });
 });
 
 describe('classifyAuthError', () => {
   it.each([
-    [{ code: 'otp_disabled' }, 'not_invited'],
-    [{ code: 'signup_disabled' }, 'not_invited'],
-    [{ message: 'Signups not allowed for otp' }, 'not_invited'],
-    [{ code: 'otp_expired' }, 'expired'],
-    [{ message: 'Token has expired or is invalid' }, 'expired'],
-    [{ code: 'over_email_send_rate_limit' }, 'rate_limited'],
+    [{ code: 'invalid_credentials' }, 'invalid_login'],
+    [{ code: 'user_not_found' }, 'invalid_login'],
+    [{ code: 'over_request_rate_limit' }, 'rate_limited'],
     [{ status: 429 }, 'rate_limited'],
     [{ name: 'AuthRetryableFetchError', status: 0, message: 'Network request failed' }, 'offline'],
+    [{ name: 'FunctionsFetchError', message: 'Failed to send a request to the Edge Function' }, 'offline'],
     [{ code: 'user_banned' }, 'banned'],
-    [{ code: 'validation_failed' }, 'invalid'],
     [new Error('???'), 'unknown'],
     [undefined, 'unknown'],
   ])('%j -> %s', (error, expected) => {
