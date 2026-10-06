@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 touch "$T/key.jks"
-cfg() { printf 'HEARTHREAD_KEYSTORE=%s\nHEARTHREAD_KEYSTORE_PASSWORD=s3cretpw\nHEARTHREAD_KEY_ALIAS=a\nHEARTHREAD_KEY_PASSWORD=s3cretkp\nEXPO_PUBLIC_SUPABASE_URL=http://x\nEXPO_PUBLIC_SUPABASE_ANON_KEY=k\nEXPO_PUBLIC_AUDIO_PROXY_URL=http://p\n' "$1" > "$T/env"; }
+cfg() { printf 'HEARTHREAD_KEYSTORE=%s\nHEARTHREAD_KEYSTORE_PASSWORD=s3cretpw\nHEARTHREAD_KEY_ALIAS=a\nHEARTHREAD_KEY_PASSWORD=s3cretkp\nEXPO_PUBLIC_SUPABASE_URL=http://x\nEXPO_PUBLIC_SUPABASE_ANON_KEY=k\n' "$1" > "$T/env"; }
 fail() { echo "FAIL: $1"; exit 1; }
 
 # no config: refuses and names the missing variables

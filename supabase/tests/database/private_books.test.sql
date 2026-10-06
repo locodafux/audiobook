@@ -6,9 +6,9 @@ select plan(9);
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'owner@example.test'),
   ('00000000-0000-0000-0000-0000000000a2', 'friend@example.test');
-insert into public.members (user_id, email, display_name) values
-  ('00000000-0000-0000-0000-0000000000a1', 'owner@example.test',  'Owner'),
-  ('00000000-0000-0000-0000-0000000000a2', 'friend@example.test', 'Friend');
+insert into public.members (user_id, email, display_name, status) values
+  ('00000000-0000-0000-0000-0000000000a1', 'owner@example.test',  'Owner',  'active'),
+  ('00000000-0000-0000-0000-0000000000a2', 'friend@example.test', 'Friend', 'active');
 
 insert into public.books (id, title, status, private_to) values
   ('open', 'Open book',    'published', null),

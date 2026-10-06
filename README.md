@@ -6,8 +6,8 @@ A small, invite-only audiobook app for friends and family.
 in a private Telegram chat (and keeps its own copy: the real backup). A tiny
 Supabase database lists the books and chapters and says who is approved. Friends ask to join
 with a username and password, the admin approves them in the app, then they download chapters
-through a small proxy that checks they are still approved and streams the file out of Telegram,
-and listen offline in an Android app. No Cloudflare account is needed.
+straight from Telegram through short-lived links that are only handed to approved members,
+and listen offline in an Android app. No Cloudflare account and no extra server are needed.
 
 This repo is public. It contains code and rules only: no books, no audio, no keys.
 
@@ -29,12 +29,14 @@ This repo is public. It contains code and rules only: no books, no audio, no key
 - **Accounts function** (`supabase/functions/accounts/`): the only way an account is created. It
   registers a pending member (synthetic internal email, never shown) and lets the admin approve,
   reject and reset passwords. Public Supabase sign-ups stay off.
-- **Audio proxy** (`audio-proxy/`, Deno Deploy): checks the person is an approved (active) member, then
-  streams a chapter from Telegram to the phone (Range supported). The bot token lives only there.
+- **Download-links function** (`supabase/functions/download-links/`): checks the person is an approved
+  (active) member (and the book's privacy), asks Telegram for a fresh download link per file and hands
+  it over; the phone then downloads straight from Telegram. The bot token is a Supabase secret, but it
+  is inside each link, so it reaches approved members' phones (accepted risk, `docs/decisions.md`).
 - **Release and keep-alive** (`scripts/`): `release.sh` builds and publishes the signed APK;
   a GitHub workflow runs `keepalive.sh` every 3 days so the free Supabase project never idles.
 
-Not done yet: the live accounts (Supabase project, Deno Deploy proxy, Telegram bot values, email sender), the real
+Not done yet: the live accounts (Supabase project, Telegram bot values, email sender), the real
 library and inviting friends. Every part is built and tested locally only.
 
 ## Layout
@@ -43,16 +45,15 @@ library and inviting friends. Every part is built and tested locally only.
 |---|---|---|
 | `app/` | Android app ([app/README.md](app/README.md)) | Expo SDK 57, React Native, TypeScript, jest |
 | `generator/` | the `hearthread` CLI ([generator/README.md](generator/README.md)) | Python 3.12, uv, ruff, pytest, ffmpeg |
-| `supabase/` | migrations, pgTAP rule tests, `config.toml`, accounts function | Postgres, Supabase CLI, Deno |
+| `supabase/` | migrations, pgTAP rule tests, `config.toml`, accounts and download-links functions | Postgres, Supabase CLI, Deno |
 | `scripts/` | `release.sh`, `keepalive.sh`, `auth-smoke.sh`, `set-admin-login.sh` and their test | bash |
-| `audio-proxy/` | the Deno Deploy proxy that streams chapters out of Telegram | Deno |
 | `docs/` | decisions, account setup, signing-key backup, spec of the previous app | |
-| `.github/workflows/` | CI (generator, app, scripts, database, audio proxy), secret scan, keep-alive | |
+| `.github/workflows/` | CI (generator, app, scripts, database, functions), secret scan, keep-alive | |
 
 ## Docs
 
 - [docs/decisions.md](docs/decisions.md): what was decided and why
-- [docs/setup-accounts.md](docs/setup-accounts.md): the by-hand account steps (Supabase, Telegram, Deno Deploy)
+- [docs/setup-accounts.md](docs/setup-accounts.md): the by-hand account steps (Supabase, Telegram)
 - [docs/signing-key-backup.md](docs/signing-key-backup.md): create and back up the APK signing key
 - [docs/SPEC.md](docs/SPEC.md): behaviour of the previous app, which Hearthread re-implements from scratch
 
@@ -96,11 +97,11 @@ Generator tests use fakes for voice, Telegram and the EPUB parser. Queue, pipeli
 invite tests need the local database (`supabase start`, `supabase db reset`) and skip without it;
 they empty its tables, so only point them at a throw-away database.
 
-**Audio proxy.** Needs Deno 2. Includes an end-to-end test over local HTTP against a fake Supabase and a fake Telegram.
+**Download-links function.** Needs Deno 2. Includes an end-to-end test over local HTTP against a fake Supabase and a fake Telegram.
 
 ```sh
-cd audio-proxy
-deno fmt --check && deno lint && deno task test
+cd supabase/functions/download-links
+deno fmt --check && deno lint && deno test --frozen --allow-net=127.0.0.1
 ```
 
 **Release and keep-alive scripts.** `scripts/release.test.sh` checks both without building,
@@ -118,13 +119,13 @@ publishing or using the network.
 
 ## What still needs your accounts
 
-The live Supabase project, the Deno Deploy proxy, the Telegram bot values and the Auth settings are set up by hand: follow [docs/setup-accounts.md](docs/setup-accounts.md).
+The live Supabase project, the Telegram bot values and the Auth settings are set up by hand: follow [docs/setup-accounts.md](docs/setup-accounts.md).
 The keep-alive workflow does nothing until the `SUPABASE_URL` and `SUPABASE_ANON_KEY` repository
 secrets or variables are set.
 
 ## Secrets
 
 Real values live only in git-ignored `.env.dev` / `.env.prod` / `.env.release` on the Mac and in
-Deno Deploy secrets. Only `.env.example` files (names, no values) are committed.
+Supabase function secrets. Only `.env.example` files (names, no values) are committed.
 Install the hook once: `pre-commit install` (runs gitleaks on every commit). CI scans the
 whole history.

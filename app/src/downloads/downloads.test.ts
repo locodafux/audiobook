@@ -1,9 +1,7 @@
 import { createSettingsStore } from '../settings/settings';
 import { chaptersToKeep } from './autoDownload';
 import { fakeFiles, fakeLinks, fakeNetwork, memoryKv, type Remote } from './fakes';
-import type { SupabaseClient } from '@supabase/supabase-js';
-
-import { downloadFailure, LINK_TTL_MS, LinksError, proxyLinks } from './links';
+import { LinksError, parseLinks } from './links';
 import { createDownloadQueue, MAX_ATTEMPTS, QUEUE_KEY, type NewJob } from './queue';
 import { createDownloadStore } from './store';
 import { audioPath, isSafeBookId, timingPath } from './types';
@@ -19,8 +17,8 @@ function setup(chapterCount = 12, opts: { net?: { connected: boolean; wifi: bool
   const specs: Record<number, { bytes: number; sha: string }> = {};
   for (let n = 1; n <= chapterCount; n++) {
     specs[n] = { bytes: 1000, sha: `sha${n}` };
-    remote[`https://proxy/${BOOK}/${n}.mp3`] = specs[n]!;
-    remote[`https://proxy/${BOOK}/${n}.json`] = { bytes: 10, sha: '', text: '{"v":1,"sentences":[]}' };
+    remote[`https://r2/${BOOK}/${n}.mp3`] = specs[n]!;
+    remote[`https://r2/${BOOK}/${n}.json`] = { bytes: 10, sha: '', text: '{"v":1,"sentences":[]}' };
   }
   const kv = memoryKv(opts.seedKv);
   const files = fakeFiles(remote);
@@ -42,12 +40,6 @@ describe('download queue', () => {
     expect(t.files.exists(audioPath(BOOK, 1))).toBe(true);
     expect(t.files.exists(timingPath(BOOK, 1))).toBe(true);
     expect(t.files.exists(`${audioPath(BOOK, 1)}.part`)).toBe(false);
-  });
-  it('sends the sign-in header with both the audio and the timing download', async () => {
-    const t = setup();
-    t.queue.enqueue([job(1)]);
-    await settle();
-    expect(t.files.calls.headers).toEqual([{ authorization: 'Bearer t' }, { authorization: 'Bearer t' }]);
   });
 
   it('asks for links just in time, in one batch of at most 10', async () => {
@@ -77,7 +69,7 @@ describe('download queue', () => {
 
   it('rejects a file whose hash is wrong, retries, then marks it failed with a reason', async () => {
     const t = setup();
-    t.remote[`https://proxy/${BOOK}/1.mp3`] = { bytes: 1000, sha: 'tampered' };
+    t.remote[`https://r2/${BOOK}/1.mp3`] = { bytes: 1000, sha: 'tampered' };
     t.queue.enqueue([job(1)]);
     await settle();
     const [failed] = t.queue.state.get().jobs;
@@ -85,7 +77,7 @@ describe('download queue', () => {
     expect(t.downloaded.has(BOOK, 1)).toBe(false);
     expect(t.files.exists(audioPath(BOOK, 1))).toBe(false);
     // retry after the file is fixed
-    t.remote[`https://proxy/${BOOK}/1.mp3`] = { bytes: 1000, sha: 'sha1' };
+    t.remote[`https://r2/${BOOK}/1.mp3`] = { bytes: 1000, sha: 'sha1' };
     t.queue.retry(BOOK, 1);
     await settle();
     expect(t.downloaded.has(BOOK, 1)).toBe(true);
@@ -93,7 +85,7 @@ describe('download queue', () => {
 
   it('rejects a file of the wrong size', async () => {
     const t = setup();
-    t.remote[`https://proxy/${BOOK}/1.mp3`] = { bytes: 999, sha: 'sha1' };
+    t.remote[`https://r2/${BOOK}/1.mp3`] = { bytes: 999, sha: 'sha1' };
     t.queue.enqueue([job(1)]);
     await settle();
     expect(t.queue.state.get().jobs[0]).toMatchObject({ status: 'failed' });
@@ -267,34 +259,17 @@ describe('keep next N', () => {
   });
 });
 
-describe('audio proxy links', () => {
-  const rows = [
-    { n: 1, bytes: 5, audio_sha256: 'ABC' },
-    { n: 2, bytes: null, audio_sha256: null },
-  ];
-  const client = (data: unknown, error: { message: string } | null = null, token: string | null = 'tok') => {
-    const asked: unknown[] = [];
-    const query = { select: () => query, eq: (...a: unknown[]) => (asked.push(a), query), in: (...a: unknown[]) => (asked.push(a), Promise.resolve({ data, error })) };
-    return { asked, client: { auth: { getSession: async () => ({ data: { session: token ? { access_token: token } : null } }) }, from: () => query } as unknown as SupabaseClient };
-  };
-
-  it('points at the proxy, carries the sign-in token, and lower-cases the hash', async () => {
-    const { client: c, asked } = client(rows);
-    const links = await proxyLinks(c, 'https://proxy.example/', () => 1000).chapterLinks('my book', [1, 2]);
-    expect(links).toEqual([{ n: 1, audioUrl: 'https://proxy.example/audio/my%20book/1', timingUrl: 'https://proxy.example/timing/my%20book/1', bytes: 5, sha256: 'abc', headers: { authorization: 'Bearer tok' }, expiresAt: 1000 + LINK_TTL_MS }]);
-    expect(asked).toEqual([['book_id', 'my book'], ['n', [1, 2]]]);
+describe('download-links answer', () => {
+  it('maps the answer and lower-cases the hash', () => {
+    const [l] = parseLinks({ chapters: [{ n: 3, audio_url: 'a', timing_url: 't', bytes: 5, sha256: 'ABC', expires_in: 900 }] }, 1000);
+    expect(l).toEqual({ n: 3, audioUrl: 'a', timingUrl: 't', bytes: 5, sha256: 'abc', expiresAt: 901_000 });
   });
-  it('gives no link to a chapter the database does not show this member (revoked, not ready, private)', async () => {
-    expect(await proxyLinks(client([]).client, 'https://p').chapterLinks('b', [1])).toEqual([]);
+  it('leaves out a chapter that is not ready instead of failing the others', () => {
+    const ready = { n: 1, audio_url: 'a', timing_url: 't', bytes: 5, sha256: 'abc', expires_in: 900 };
+    expect(parseLinks({ chapters: [ready, { n: 2, error: 'not_available' }] }, 0).map((l) => l.n)).toEqual([1]);
   });
-  it('needs a sign-in and a working database', async () => {
-    await expect(proxyLinks(client(rows, null, null).client, 'https://p').chapterLinks('b', [1])).rejects.toMatchObject({ code: 'unavailable' });
-    await expect(proxyLinks(client(null, { message: 'down' }).client, 'https://p').chapterLinks('b', [1])).rejects.toBeInstanceOf(LinksError);
-  });
-  it('turns a refused download into the reason the queue understands', () => {
-    expect(downloadFailure(new Error('UnableToDownload: HTTP 403'))).toMatchObject({ code: 'access_ended' });
-    expect(downloadFailure(new Error('UnableToDownload: HTTP 401'))).toMatchObject({ code: 'access_ended' });
-    expect(downloadFailure(new Error('UnableToDownload: HTTP 404'))).toMatchObject({ code: 'not_available' });
-    expect(downloadFailure(new Error('network lost'))).not.toBeInstanceOf(LinksError);
+  it('rejects an answer it does not understand', () => {
+    expect(() => parseLinks({ nope: 1 }, 0)).toThrow(LinksError);
+    expect(() => parseLinks({ chapters: [{ n: 1 }] }, 0)).toThrow(LinksError);
   });
 });

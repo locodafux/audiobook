@@ -7,7 +7,7 @@ import { createExpoFiles } from './downloads/expoFiles';
 import { createExpoNetwork } from './downloads/expoNetwork';
 import { readSavedBookList } from './data/offlineList';
 import type { BookRow, ChapterRow } from './data/types';
-import { proxyLinks } from './downloads/links';
+import { supabaseLinks } from './downloads/links';
 import { createDownloadQueue } from './downloads/queue';
 import { createDownloadStore } from './downloads/store';
 import { createPlayerController } from './player/controller';
@@ -18,12 +18,12 @@ import type { Services } from './servicesContext';
 import { createPhonePorts } from './storage/phonePorts';
 
 /** Wires the real phone pieces (audio, files, network) to the queue, the player and the screens' ports. */
-export async function createServices(client: SupabaseClient, phone: Phone, audioProxyUrl: string): Promise<Services> {
+export async function createServices(client: SupabaseClient, phone: Phone): Promise<Services> {
   const { settings, bookmarks, stats } = phone;
   const files = createExpoFiles();
   const positions = createPositionStore(AsyncStorage);
   const downloaded = createDownloadStore(AsyncStorage, files);
-  const queue = createDownloadQueue({ kv: AsyncStorage, files, links: proxyLinks(client, audioProxyUrl), downloaded, settings, network: createExpoNetwork() });
+  const queue = createDownloadQueue({ kv: AsyncStorage, files, links: supabaseLinks(client), downloaded, settings, network: createExpoNetwork() });
   const player = createPlayerController({
     engine: createExpoEngine(),
     files,

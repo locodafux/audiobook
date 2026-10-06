@@ -2,7 +2,7 @@
 -- private to one member (the captain's imported library).
 
 -- Phones never see these columns (the column grants in the access-rules migration list the
--- readable ones); only the generator and the audio proxy (service role) do.
+-- readable ones); only the generator and the download-links function (service role) do.
 alter table public.chapters
   add column telegram_audio_file_id         text,
   add column telegram_audio_file_unique_id  text,

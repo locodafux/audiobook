@@ -15,7 +15,7 @@ uv run hearthread invite add friend@mail.com --name Friend
 ```
 
 **Where audio lives.** A chapter is only listenable after Telegram has accepted both of its files; the
-`file_id`s are stored on the chapter (hidden from phones, which download through `audio-proxy/`). The
+`file_id`s are stored on the chapter (hidden from phones, which get download links from the `download-links` function). The
 Mac keeps a copy in the library folder (`HEARTHREAD_LIBRARY_DIR`, default `library/` beside the state
 folder). **That folder is the real backup**: if Telegram ever drops files, `hearthread backup-retry --all`
 uploads them again from it.
@@ -25,12 +25,12 @@ uploads them again from it.
 ```sh
 uv run hearthread --prod import-voiced /path/to/processed/shadow-slave-vol-01-chapters-1-95 \
   --id shadow-slave-01 --title "Shadow Slave, Vol. 1" --author "Guiltythree" \
-  --series "Shadow Slave" --volume 1 --first-chapter 1 --private-to you@mail.com
+  --series "Shadow Slave" --volume 1 --first-chapter 1 --private-to your-username
 ```
 
 Each `chapter_NN.mp3` + `chapter_NN_timing.json` is copied into the library folder, uploaded to Telegram
 (about 6 s a chapter because of Telegram's send limits), converted to the new timing format and
-recorded. `--private-to` makes the book visible to that member only (they must already be invited).
+recorded. `--private-to` (a username, or an email) makes the book visible to that member only; they must already be a member.
 Run it again after an interruption: finished chapters are skipped. `--limit 3` is a cheap first try.
 The book only appears once every chapter is in. Run it once per volume.
 

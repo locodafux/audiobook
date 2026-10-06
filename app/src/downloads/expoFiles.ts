@@ -2,7 +2,6 @@ import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import type { FileStore } from './files';
-import { downloadFailure } from './links';
 
 const toHex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
@@ -25,14 +24,10 @@ export function createExpoFiles(): FileStore {
       f.create({ overwrite: true });
       f.write(text);
     },
-    async download(url, path, { headers, onProgress, signal }) {
+    async download(url, path, { onProgress, signal }) {
       const f = file(path);
       ensureParent(f);
-      try {
-        await File.downloadFileAsync(url, f, { idempotent: true, headers, signal, onProgress: onProgress && (({ bytesWritten, totalBytes }) => onProgress(bytesWritten, totalBytes)) });
-      } catch (e) {
-        throw signal?.aborted ? e : downloadFailure(e);
-      }
+      await File.downloadFileAsync(url, f, { idempotent: true, signal, onProgress: onProgress && (({ bytesWritten, totalBytes }) => onProgress(bytesWritten, totalBytes)) });
     },
     // ponytail: reads the whole chapter (about 3 MB, rarely 30 MB) into memory to hash it; chunked hashing if that ever hurts.
     async sha256(path) {

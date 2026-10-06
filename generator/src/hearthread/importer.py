@@ -57,9 +57,10 @@ def find_chapters(folder: Path) -> list[tuple[int, Path, Path]]:
 
 
 def member_id(deps: Deps, email: str) -> str:
-    row = deps.db.one("SELECT user_id FROM members WHERE email = %s", (email.strip().lower(),))
+    who = email.strip().lower()
+    row = deps.db.one("SELECT user_id FROM members WHERE username = %s OR email = %s", (who, who))
     if not row:
-        raise CommandError(f"{email} is not a member yet (`hearthread invite add {email}` first)")
+        raise CommandError(f"{email} is not a member yet (register in the app and approve first)")
     return str(row["user_id"])
 
 

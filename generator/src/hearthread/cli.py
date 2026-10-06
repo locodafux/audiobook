@@ -145,7 +145,10 @@ def make_parser() -> argparse.ArgumentParser:
         (("--series",), {"help": "series title"}),
         (("--volume",), {"type": int}),
         (("--first-chapter",), {"type": int, "default": 1, "help": "number shown for file 1"}),
-        (("--private-to",), {"metavar": "EMAIL", "help": "only this member can see the book"}),
+        (
+            ("--private-to",),
+            {"metavar": "USERNAME", "help": "only this member (username or email) sees the book"},
+        ),
         (("--limit",), {"type": int, "help": "upload at most this many chapters, then stop"}),
     )
     cmd("remove", "delete a book from the list and the library folder", book, yes)

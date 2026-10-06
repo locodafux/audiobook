@@ -34,7 +34,8 @@ def captain(db):
     uid = str(uuid.uuid4())
     db.x("INSERT INTO auth.users (id, email) VALUES (%s, 'cap@test.invalid')", (uid,))
     db.x(
-        "INSERT INTO members (user_id, email, display_name) VALUES (%s, 'cap@test.invalid', 'C')",
+        """INSERT INTO members (user_id, email, display_name, username, status)
+           VALUES (%s, 'cap@test.invalid', 'C', 'capn', 'active')""",
         (uid,),
     )
     return uid
@@ -104,6 +105,11 @@ def test_telegram_refusal_leaves_the_chapter_unlisted(deps, voiced, captain):
     deps.backup = FakeBackup(fail_times=999, permanent=True)
     assert run(deps, voiced, private_to="cap@test.invalid") is False
     assert deps.db.q("SELECT 1 FROM chapters WHERE status = 'ready'") == []
+
+
+def test_private_to_accepts_a_username_too(deps, voiced, captain):
+    assert run(deps, voiced, private_to="Capn")
+    assert str(deps.db.one("SELECT private_to FROM books")["private_to"]) == captain
 
 
 def test_unknown_owner_or_empty_folder_is_a_clear_refusal(deps, voiced, tmp_path):

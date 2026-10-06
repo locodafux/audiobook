@@ -79,11 +79,11 @@ jobs:
       - run: supabase db reset
       - run: supabase test db
 
-  audio-proxy:
+  link-function:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: audio-proxy
+        working-directory: supabase/functions/download-links
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
@@ -91,7 +91,7 @@ jobs:
           deno-version: v2.x
       - run: deno fmt --check
       - run: deno lint
-      - run: deno task test
+      - run: deno test --frozen --allow-net=127.0.0.1
 
   accounts-function:
     runs-on: ubuntu-latest

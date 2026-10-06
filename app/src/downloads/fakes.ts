@@ -15,7 +15,7 @@ export type Remote = { bytes: number; sha: string; text?: string };
 
 export function fakeFiles(remote: Record<string, Remote> = {}, free = 10_000_000_000) {
   const disk = new Map<string, Remote>();
-  const calls = { downloads: [] as string[], headers: [] as (Record<string, string> | undefined)[] };
+  const calls = { downloads: [] as string[] };
   const files: FileStore & { disk: typeof disk; remote: typeof remote; calls: typeof calls; free: number; failNext: Error | null; gate: Promise<void> | null } = {
     disk,
     remote,
@@ -31,9 +31,8 @@ export function fakeFiles(remote: Record<string, Remote> = {}, free = 10_000_000
       return f.text ?? '';
     },
     writeText: (p, text) => void disk.set(p, { bytes: text.length, sha: '', text }),
-    async download(url, path, { headers, onProgress, signal }) {
+    async download(url, path, { onProgress, signal }) {
       calls.downloads.push(url);
-      calls.headers.push(headers);
       if (files.failNext) {
         const e = files.failNext;
         files.failNext = null;
@@ -74,7 +73,7 @@ export function fakeLinks(chapters: Record<number, { bytes: number; sha: string 
       if (api.error) throw api.error;
       return ns
         .filter((n) => chapters[n])
-        .map<ChapterLink>((n) => ({ n, audioUrl: `https://proxy/${bookId}/${n}.mp3`, timingUrl: `https://proxy/${bookId}/${n}.json`, headers: { authorization: 'Bearer t' }, bytes: chapters[n]!.bytes, sha256: chapters[n]!.sha, expiresAt: now() + 900_000 }));
+        .map<ChapterLink>((n) => ({ n, audioUrl: `https://r2/${bookId}/${n}.mp3`, timingUrl: `https://r2/${bookId}/${n}.json`, bytes: chapters[n]!.bytes, sha256: chapters[n]!.sha, expiresAt: now() + 900_000 }));
     },
   };
   return api;
