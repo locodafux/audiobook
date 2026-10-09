@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { AdminApi, MemberItem } from '../admin/adminApi';
 import { AuthFlowError } from '../auth/authApi';
 import { MIN_PASSWORD } from '../auth/username';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { Button, Callout, EmptyState } from '../ui/kit';
 import { BackHeader, Group } from '../ui/settingsKit';
 
@@ -139,13 +139,13 @@ export function AdminScreen({ api, onBack }: { api: AdminApi; onBack: () => void
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   pad: { paddingHorizontal: 20, paddingTop: 8 },
   empty: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted, padding: 16 },
   item: { padding: 14, gap: 8 },
   name: { fontFamily: fonts.sansBold, fontSize: 15, color: colors.text },
-  sub: { fontFamily: fonts.sans, fontSize: 12, color: colors.muted, marginTop: -4 },
+  sub: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted, marginTop: -4 },
   actions: { flexDirection: 'row', gap: 8 },
   input: { backgroundColor: colors.bg, borderRadius: 14, padding: 12, fontSize: 14, fontFamily: fonts.sans, color: colors.text, borderWidth: 1.5, borderColor: colors.line },
-});
+}));

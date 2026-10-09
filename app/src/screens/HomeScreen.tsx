@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { groupBooks } from '../data/series';
 import type { BookRow } from '../data/types';
 import type { BookListState } from '../data/useBookList';
-import { colors } from '../theme';
+import { colors, themedStyles } from '../theme';
 import { EmptyState, ScreenTitle, Skeleton } from '../ui/kit';
 import { GridTile } from './BookCard';
 import { CachedPill, LibraryError } from './LibraryStatus';
@@ -70,7 +70,7 @@ export function HomeScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   column: { gap: 14, paddingHorizontal: 20, marginBottom: 16 },
-});
+}));

@@ -18,6 +18,8 @@ export function YouFlow({
   adminApi,
   books,
   storage,
+  initialRoute = null,
+  onRouteChange,
   onSignOut,
 }: {
   username: string;
@@ -26,10 +28,14 @@ export function YouFlow({
   adminApi?: AdminApi;
   books: readonly BookRow[];
   storage: StoragePort;
+  /** The page to open on, and a callback so a parent can restore it after the screens are rebuilt (a theme change). */
+  initialRoute?: YouRoute | null;
+  onRouteChange?: (route: YouRoute | null) => void;
   onSignOut: () => void;
 }) {
-  const [route, setRoute] = useState<YouRoute | null>(null);
+  const [route, setRoute] = useState<YouRoute | null>(initialRoute);
   const { bookmarks } = usePhone();
+  useEffect(() => onRouteChange?.(route), [route, onRouteChange]);
 
   useEffect(() => {
     if (!route) return;

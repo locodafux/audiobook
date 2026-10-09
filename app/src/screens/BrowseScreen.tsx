@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { filterBooks, groupBooks } from '../data/series';
 import type { BookRow } from '../data/types';
 import type { BookListState } from '../data/useBookList';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { EmptyState, ScreenTitle } from '../ui/kit';
 import { BookRowItem } from './BookCard';
 import { CachedPill, LibraryError, SkeletonRows } from './LibraryStatus';
@@ -80,9 +80,9 @@ export function BrowseScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   search: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 20, marginVertical: 6, backgroundColor: colors.surf, borderRadius: 99, paddingHorizontal: 16 },
   input: { flex: 1, paddingVertical: 12, fontFamily: fonts.sans, fontSize: 13, color: colors.text },
-  count: { fontFamily: fonts.sansBold, fontSize: 11.5, color: colors.muted, marginHorizontal: 20, marginTop: 10, marginBottom: 4 },
-});
+  count: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.muted, marginHorizontal: 20, marginTop: 10, marginBottom: 4 },
+}));

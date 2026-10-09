@@ -232,7 +232,7 @@ describe('You', () => {
     await fireEvent.press(screen.getByText('Light'));
     await fireEvent.press(screen.getByLabelText('Rose'));
     expect(phone.settings.getState()).toMatchObject({ theme: 'light', accent: 'rose' });
-    expect(screen.getByText('Takes effect the next time you open the app.')).toBeTruthy();
+    expect(screen.queryByText(/next time you open the app/)).toBeNull();
   });
 });
 
@@ -360,6 +360,16 @@ describe('Downloads', () => {
     await fireEvent.press(screen.getAllByText('Remove').at(-1)!);
     await flush();
     expect(storage.calls).toEqual(['cleanUp:shadow', 'remove:seduction']);
+  });
+
+  it('opens a book when its row on the phone is tapped', async () => {
+    const onOpenBook = jest.fn();
+    const storage = fakeStorage([book({ bookId: 'seduction', title: 'The Art of Seduction' })]);
+    await renderWithPhone(<DownloadsScreen ports={ports(fakeDownloads({}).port, storage.port)} onOpenBook={onOpenBook} />);
+    await fireEvent.press(screen.getByText('On this phone'));
+    await flush();
+    await fireEvent.press(screen.getByLabelText('Open The Art of Seduction'));
+    expect(onOpenBook).toHaveBeenCalledWith('seduction');
   });
 
   it('frees every finished chapter with one tap', async () => {

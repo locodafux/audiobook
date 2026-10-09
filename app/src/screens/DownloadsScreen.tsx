@@ -14,7 +14,7 @@ import {
   type QueueItem,
   type StorageUsage,
 } from '../storage/ports';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { Button, EmptyState, OfflinePill, ScreenTitle } from '../ui/kit';
 import { ConfirmDialog, Segmented } from '../ui/settingsKit';
 import { SwipeRow } from '../ui/SwipeRow';
@@ -23,7 +23,7 @@ type Tab = 'queue' | 'phone';
 const TAB_LABEL = { queue: 'Queue', phone: 'On this phone' } as const;
 
 /** Downloads: the live queue (F1-F4) and what is stored on the phone (F5, F6). */
-export function DownloadsScreen({ ports }: { ports: PhonePorts }) {
+export function DownloadsScreen({ ports, onOpenBook }: { ports: PhonePorts; /** Opens a book from the "On this phone" list. */ onOpenBook?: (bookId: string) => void }) {
   const [tab, setTab] = useState<Tab>('queue');
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
@@ -32,7 +32,7 @@ export function DownloadsScreen({ ports }: { ports: PhonePorts }) {
         <Segmented value={tab} options={['queue', 'phone'] as const} label={(t) => TAB_LABEL[t]} onChange={setTab} />
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        {tab === 'queue' ? <QueueTab downloads={ports.downloads} /> : <StorageTab storage={ports.storage} />}
+        {tab === 'queue' ? <QueueTab downloads={ports.downloads} /> : <StorageTab storage={ports.storage} onOpenBook={onOpenBook} />}
       </ScrollView>
     </SafeAreaView>
   );
@@ -155,7 +155,7 @@ const Section = ({ title, action }: { title: string; action?: { label: string; o
 
 type Load = { status: 'loading' } | { status: 'error' } | { status: 'ready'; usage: StorageUsage };
 
-function StorageTab({ storage }: { storage: PhonePorts['storage'] }) {
+function StorageTab({ storage, onOpenBook }: { storage: PhonePorts['storage']; onOpenBook?: (bookId: string) => void }) {
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [removing, setRemoving] = useState<PhoneBook | null>(null);
   const [failed, setFailed] = useState(false);
@@ -212,7 +212,7 @@ function StorageTab({ storage }: { storage: PhonePorts['storage'] }) {
             { label: 'Remove', icon: 'trash-2' as const, tone: 'danger' as const, onPress: () => setRemoving(b) },
           ]}
         >
-          <View style={styles.row}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Open ${b.title}`} disabled={!onOpenBook} onPress={() => onOpenBook?.(b.bookId)} style={styles.row}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text numberOfLines={1} style={styles.rowTitle}>
                 {b.title}
@@ -225,7 +225,7 @@ function StorageTab({ storage }: { storage: PhonePorts['storage'] }) {
             <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${b.title}`} onPress={() => setRemoving(b)} hitSlop={8}>
               <Text style={styles.sectionAction}>Remove</Text>
             </Pressable>
-          </View>
+          </Pressable>
         </SwipeRow>
       ))}
       <ConfirmDialog
@@ -246,19 +246,19 @@ function StorageTab({ storage }: { storage: PhonePorts['storage'] }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   head: { marginHorizontal: 20, marginTop: 8, padding: 16, backgroundColor: colors.surf, borderRadius: 20 },
   headTitle: { fontFamily: fonts.serif, fontSize: 18, color: colors.text },
-  headSub: { fontFamily: fonts.sans, fontSize: 12, color: colors.muted, marginTop: 3 },
+  headSub: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted, marginTop: 3 },
   offer: { marginHorizontal: 20, marginTop: 12, padding: 16, backgroundColor: colors.tint, borderRadius: 20 },
   offerTitle: { fontFamily: fonts.sansBold, fontSize: 14, color: colors.text },
-  offerBody: { fontFamily: fonts.sans, fontSize: 12, lineHeight: 17, color: colors.muted, marginTop: 2 },
+  offerBody: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 2 },
   section: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, marginTop: 18, marginBottom: 6 },
-  sectionTitle: { fontFamily: fonts.sansHeavy, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: colors.muted },
-  sectionAction: { fontFamily: fonts.sansHeavy, fontSize: 12, color: colors.accent },
+  sectionTitle: { fontFamily: fonts.sansHeavy, fontSize: 11.5, letterSpacing: 1, textTransform: 'uppercase', color: colors.muted },
+  sectionAction: { fontFamily: fonts.sansHeavy, fontSize: 13, color: colors.accent },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 20 },
   rowTitle: { fontFamily: fonts.sansBold, fontSize: 13.5, color: colors.text },
-  rowSub: { fontFamily: fonts.sans, fontSize: 11.5, color: colors.muted, marginTop: 2 },
-  tag: { fontFamily: fonts.sansBold, fontSize: 11, color: colors.muted },
-});
+  rowSub: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted, marginTop: 2 },
+  tag: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.muted },
+}));

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 
 import type { AdminApi } from './admin/adminApi';
@@ -13,11 +13,12 @@ import { DownloadsScreen } from './screens/DownloadsScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { PlayerScreen } from './screens/PlayerScreen';
 import { YouFlow } from './screens/YouFlow';
+import type { YouRoute } from './screens/YouScreen';
 import { loadProfile, type Profile, type ProfileApi } from './profile/profile';
 import { stubPorts, type PhonePorts } from './storage/ports';
 import type { Bookmark } from './bookmarks/bookmarks';
 import { useServices } from './servicesContext';
-import { colors } from './theme';
+import { colors, themedStyles } from './theme';
 import { MiniPlayer } from './ui/MiniPlayer';
 import { TabBar, type TabKey } from './ui/TabBar';
 import { UpdateBanner } from './update/UpdateBanner';
@@ -35,6 +36,7 @@ export function Shell({
   ports: portsProp,
   onJumpToBookmark,
   onSignOut,
+  themeKey,
 }: {
   username: string;
   library: LibraryApi;
@@ -45,6 +47,8 @@ export function Shell({
   /** Opens the player at a bookmark. Defaults to the real player. */
   onJumpToBookmark?: (bookmark: Bookmark) => void;
   onSignOut: () => void;
+  /** Changes when the theme or accent does; the screens below remount to pick up the new colours. */
+  themeKey?: number;
 }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   useEffect(() => {
@@ -57,6 +61,7 @@ export function Shell({
   const [tab, setTab] = useState<TabKey>('home');
   const [open, setOpen] = useState<BookRow | null>(null);
   const [playerOpen, setPlayerOpen] = useState(false);
+  const [youRoute, setYouRoute] = useState<YouRoute | null>(null); // kept here so a theme change stays on the same page
   const services = useServices();
   const ports = portsProp ?? services?.ports ?? stubPorts;
   const books = useBookList(library);
@@ -108,43 +113,45 @@ export function Shell({
 
   return (
     <View style={styles.root}>
-      <UpdateBanner />
-      <View style={styles.content}>
-        {open ? (
-          <BookScreen book={open} volumes={volumes} library={library} descriptionStore={AsyncStorage} onSelectVolume={setOpen} onBack={() => setOpen(null)} onJump={jump} onPlay={services ? (rows, n) => void play(open, rows, n) : undefined} />
+      <Fragment key={themeKey}>
+        <UpdateBanner />
+        <View style={styles.content}>
+          {open ? (
+            <BookScreen book={open} volumes={volumes} library={library} descriptionStore={AsyncStorage} onSelectVolume={setOpen} onBack={() => setOpen(null)} onJump={jump} onPlay={services ? (rows, n) => void play(open, rows, n) : undefined} />
+          ) : null}
+          {/* Kept mounted (just hidden) under a book page so Back returns to the same search and scroll position. */}
+          <View style={[styles.content, open && styles.hidden]}>
+            {tab === 'home' ? (
+              <HomeScreen username={username} books={books} onOpen={setOpen} />
+            ) : tab === 'browse' ? (
+              <BrowseScreen books={books} onOpen={setOpen} />
+            ) : tab === 'downloads' ? (
+              <DownloadsScreen ports={ports} onOpenBook={(id) => setOpen(list?.find((b) => b.id === id) ?? null)} />
+            ) : (
+              <YouFlow username={username} profile={profile} adminApi={adminApi} books={list ?? []} storage={ports.storage} initialRoute={youRoute} onRouteChange={setYouRoute} onSignOut={onSignOut} />
+            )}
+          </View>
+        </View>
+        {playerOpen ? null : <MiniPlayer onOpen={() => setPlayerOpen(true)} />}
+        <TabBar
+          active={tab}
+          onChange={(t) => {
+            setOpen(null);
+            setTab(t);
+          }}
+        />
+        {playerOpen ? (
+          <View style={StyleSheet.absoluteFill}>
+            <PlayerScreen onClose={() => setPlayerOpen(false)} />
+          </View>
         ) : null}
-        {/* Kept mounted (just hidden) under a book page so Back returns to the same search and scroll position. */}
-        <View style={[styles.content, open && styles.hidden]}>
-          {tab === 'home' ? (
-            <HomeScreen username={username} books={books} onOpen={setOpen} />
-          ) : tab === 'browse' ? (
-            <BrowseScreen books={books} onOpen={setOpen} />
-          ) : tab === 'downloads' ? (
-            <DownloadsScreen ports={ports} />
-          ) : (
-            <YouFlow username={username} profile={profile} adminApi={adminApi} books={list ?? []} storage={ports.storage} onSignOut={onSignOut} />
-          )}
-        </View>
-      </View>
-      {playerOpen ? null : <MiniPlayer onOpen={() => setPlayerOpen(true)} />}
-      <TabBar
-        active={tab}
-        onChange={(t) => {
-          setOpen(null);
-          setTab(t);
-        }}
-      />
-      {playerOpen ? (
-        <View style={StyleSheet.absoluteFill}>
-          <PlayerScreen onClose={() => setPlayerOpen(false)} />
-        </View>
-      ) : null}
+      </Fragment>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1 },
   hidden: { display: 'none' },
-});
+}));

@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { NOTE_MAX, forBook, formatPosition, type Bookmark } from '../bookmarks/bookmarks';
 import { usePhone } from '../phone/PhoneProvider';
 import { useStore } from '../phone/persisted';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { EmptyState } from '../ui/kit';
 import { NoteDialog } from '../ui/settingsKit';
 import { SwipeRow } from '../ui/SwipeRow';
@@ -70,10 +70,10 @@ export function BookmarksTab({ bookId, onJump }: { bookId: string; onJump: (book
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: { paddingVertical: 12, paddingHorizontal: 20, gap: 4 },
-  where: { fontFamily: fonts.sansHeavy, fontSize: 11, color: colors.muted },
+  where: { fontFamily: fonts.sansHeavy, fontSize: 13, color: colors.muted },
   quote: { fontFamily: fonts.serif, fontSize: 14, lineHeight: 21, color: colors.text },
   note: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  noteText: { flex: 1, fontFamily: fonts.sansBold, fontSize: 12, color: colors.accent },
-});
+  noteText: { flex: 1, fontFamily: fonts.sansBold, fontSize: 13, color: colors.accent },
+}));

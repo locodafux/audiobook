@@ -79,6 +79,8 @@ export interface PlayerController {
   nextSentence(): void;
   openChapter(n: number, autoplay?: boolean): Promise<void>;
   nextChapter(autoplay?: boolean): Promise<void>;
+  /** Restarts the chapter if it is more than 3 s in, otherwise goes to the chapter before. */
+  prevChapter(autoplay?: boolean): Promise<void>;
   setSpeed(speed: number, scope: 'book' | 'all'): void;
   setSleep(timer: { minutes: number } | 'chapter' | null): void;
   extendSleep(): void;
@@ -129,6 +131,9 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
 
   const chapterAfter = (n: number) =>
     state.get().chapters.filter((c) => c.n > n).sort((a, b) => a.n - b.n)[0];
+
+  const chapterBefore = (n: number) =>
+    state.get().chapters.filter((c) => c.n < n).sort((a, b) => b.n - a.n)[0];
 
   function finishChapter() {
     const { book, chapterN, sleep } = state.get();
@@ -301,6 +306,12 @@ export function createPlayerController(deps: PlayerDeps): PlayerController {
       const n = state.get().chapterN;
       const next = n === null ? undefined : chapterAfter(n);
       if (next) await api.openChapter(next.n, autoplay);
+    },
+    async prevChapter(autoplay = true) {
+      const { chapterN, position } = state.get();
+      const before = chapterN === null ? undefined : chapterBefore(chapterN);
+      if (before && position <= 3) await api.openChapter(before.n, autoplay);
+      else api.seekTo(0);
     },
     setSpeed(speed, scope) {
       const { book } = state.get();

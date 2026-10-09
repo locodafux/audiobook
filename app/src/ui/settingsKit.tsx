@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { Button, type IconName } from './kit';
 
 /** "‹ Playback" header for a settings page. */
@@ -228,21 +228,21 @@ export function NoteDialog({ visible, initial, max, onSave, onCancel }: { visibl
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingTop: 6, paddingBottom: 6 },
   headerTitle: { fontFamily: fonts.serif, fontSize: 22, color: colors.text },
-  groupTitle: { fontFamily: fonts.sansHeavy, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: colors.muted, marginHorizontal: 20, marginBottom: 8 },
+  groupTitle: { fontFamily: fonts.sansHeavy, fontSize: 11.5, letterSpacing: 1, textTransform: 'uppercase', color: colors.muted, marginHorizontal: 20, marginBottom: 8 },
   group: { marginHorizontal: 20, backgroundColor: colors.surf, borderRadius: 20, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 16 },
   rowTitle: { fontFamily: fonts.sansBold, fontSize: 14, color: colors.text },
-  rowSub: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 16, color: colors.muted, marginTop: 1 },
+  rowSub: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 1 },
   value: { backgroundColor: colors.surf2, borderRadius: 99, paddingVertical: 6, paddingHorizontal: 12 },
-  valueText: { fontFamily: fonts.sansBold, fontSize: 12, color: colors.text },
+  valueText: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },
   choice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
   choiceText: { fontFamily: fonts.sansBold, fontSize: 14, color: colors.text },
   seg: { flexDirection: 'row', backgroundColor: colors.surf2, borderRadius: 99, padding: 4, gap: 4 },
   segItem: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 99 },
-  segText: { fontFamily: fonts.sansBold, fontSize: 12, color: colors.muted },
+  segText: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.muted },
   scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 },
   sheet: { backgroundColor: colors.surf, borderRadius: 22, paddingVertical: 18, paddingHorizontal: 22 },
   sheetTitle: { fontFamily: fonts.serif, fontSize: 18, color: colors.text, marginBottom: 4 },
@@ -251,4 +251,4 @@ const styles = StyleSheet.create({
   dialogTitle: { fontFamily: fonts.serif, fontSize: 18, color: colors.text, textAlign: 'center' },
   dialogBody: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, color: colors.muted, textAlign: 'center' },
   note: { minHeight: 90, textAlignVertical: 'top', backgroundColor: colors.surf2, borderRadius: 14, padding: 12, fontFamily: fonts.sans, fontSize: 14, color: colors.text },
-});
+}));

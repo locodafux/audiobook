@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 
 /** A bottom sheet over the current screen (speed, sleep timer, chapters, reading view). */
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -39,12 +39,12 @@ export function Pills<T extends string | number>({ options, value, onPick }: { o
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
   sheet: { maxHeight: '75%', backgroundColor: colors.surf, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 16 },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   title: { fontFamily: fonts.serif, fontSize: 20, color: colors.text },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pill: { paddingVertical: 9, paddingHorizontal: 15, borderRadius: 99, backgroundColor: colors.surf2 },
-  pillText: { fontFamily: fonts.sansBold, fontSize: 12.5, color: colors.text },
-});
+  pillText: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },
+}));

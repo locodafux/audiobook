@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors } from '../theme';
+import { colors, themedStyles } from '../theme';
 import { Button, textStyles } from '../ui/kit';
 
 /** Shown when access was removed or the request was rejected. Downloaded files stay on the phone, locked, until sign-in. */
@@ -24,7 +24,7 @@ export function AccessEndedScreen({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   body: { flex: 1, justifyContent: 'center', gap: 12, paddingHorizontal: 26 },
-});
+}));

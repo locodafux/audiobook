@@ -41,5 +41,5 @@ export function Cover({
 const styles = StyleSheet.create({
   frame: { aspectRatio: 2 / 3, borderRadius: 14, overflow: 'hidden', backgroundColor: '#20252e' },
   initial: { position: 'absolute', top: 8, left: 10, fontFamily: fonts.serif, fontSize: 30, color: 'rgba(255,255,255,0.9)' },
-  title: { position: 'absolute', left: 9, right: 9, bottom: 9, fontFamily: fonts.serif, fontSize: 10, lineHeight: 12, color: '#fff' },
+  title: { position: 'absolute', left: 9, right: 9, bottom: 9, fontFamily: fonts.serif, fontSize: 11.5, lineHeight: 16, color: '#fff' },
 });

@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import type { ComponentProps, ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 
 export type IconName = ComponentProps<typeof Feather>['name'];
 
@@ -113,29 +113,29 @@ export function ScreenTitle({ children, sub }: { children: string; sub?: string 
   );
 }
 
-export const textStyles = StyleSheet.create({
-  kicker: { fontFamily: fonts.sansHeavy, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: colors.muted },
+export const textStyles = themedStyles(() => StyleSheet.create({
+  kicker: { fontFamily: fonts.sansHeavy, fontSize: 11.5, letterSpacing: 1, textTransform: 'uppercase', color: colors.muted },
   body: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 20, color: colors.muted },
   heading: { fontFamily: fonts.serif, fontSize: 30, lineHeight: 33, letterSpacing: -0.6, color: colors.text },
-  link: { fontFamily: fonts.sansHeavy, fontSize: 12, color: colors.accent, textAlign: 'center' },
-});
+  link: { fontFamily: fonts.sansHeavy, fontSize: 13, color: colors.accent, textAlign: 'center' },
+}));
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 99 },
   btnPrimary: { backgroundColor: colors.accent },
   btnGhost: { borderWidth: 1.5, borderColor: colors.line },
   btnText: { fontFamily: fonts.sansHeavy, fontSize: 13.5 },
-  label: { fontFamily: fonts.sansHeavy, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted, marginBottom: 6 },
+  label: { fontFamily: fonts.sansHeavy, fontSize: 11.5, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.muted, marginBottom: 6 },
   field: { backgroundColor: colors.surf, borderRadius: 16, padding: 14, fontSize: 14, fontFamily: fonts.sans, color: colors.text, borderWidth: 1.5, borderColor: colors.line },
   callout: { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 16, alignItems: 'flex-start' },
-  calloutText: { flex: 1, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17, color: colors.text },
+  calloutText: { flex: 1, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, color: colors.text },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginHorizontal: 20, marginBottom: 8, backgroundColor: colors.surf2, borderRadius: 99, paddingVertical: 7, paddingHorizontal: 14 },
-  pillText: { fontFamily: fonts.sansBold, fontSize: 11.5, color: colors.text },
+  pillText: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },
   empty: { margin: 20, padding: 26, backgroundColor: colors.surf, borderRadius: 22, alignItems: 'center', gap: 8 },
   bubble: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontFamily: fonts.serif, fontSize: 17, color: colors.text, textAlign: 'center' },
-  emptyBody: { fontFamily: fonts.sans, fontSize: 12, lineHeight: 18, color: colors.muted, textAlign: 'center' },
+  emptyBody: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, color: colors.muted, textAlign: 'center' },
   titleWrap: { paddingHorizontal: 20, paddingTop: 6, paddingBottom: 6 },
-  titleSub: { fontFamily: fonts.sans, fontSize: 12, color: colors.muted },
+  titleSub: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted },
   title: { fontFamily: fonts.serif, fontSize: 26, letterSpacing: -0.4, color: colors.text },
-});
+}));

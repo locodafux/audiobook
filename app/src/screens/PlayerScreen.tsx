@@ -7,7 +7,7 @@ import { formatClock, formatSpeed } from '../format';
 import { useServices, type Services } from '../servicesContext';
 import { useStore as usePhoneStore } from '../phone/persisted';
 import { useStore } from '../store';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { Button, EmptyState, type IconName } from '../ui/kit';
 import { Slider } from '../ui/Slider';
 import { ChaptersSheet, ReadingSheet, SleepSheet, SpeedSheet } from './PlayerSheets';
@@ -184,11 +184,11 @@ function Player({ services, onClose }: { services: Services; onClose: () => void
           <Text style={styles.time}>-{formatClock(Math.max(0, s.duration - s.position))}</Text>
         </View>
         <View style={styles.row}>
-          {ctl('skip-back', 'Previous sentence', () => player.prevSentence())}
+          {ctl('skip-back', 'Previous chapter', () => void player.prevChapter())}
           {ctl('rotate-ccw', `Back ${p.skipBackS} seconds`, () => player.skipBack())}
           {ctl(s.playing ? 'pause' : 'play', s.playing ? 'Pause' : 'Play', () => player.toggle(), true)}
           {ctl('rotate-cw', `Forward ${p.skipForwardS} seconds`, () => player.skipForward())}
-          {ctl('skip-forward', 'Next sentence', () => player.nextSentence())}
+          {ctl('skip-forward', 'Next chapter', () => void player.nextChapter())}
         </View>
         <View style={styles.row}>
           <Pressable accessibilityRole="button" accessibilityLabel="Speed" onPress={() => setSheet('speed')} style={styles.pillBtn}>
@@ -213,27 +213,27 @@ function Player({ services, onClose }: { services: Services; onClose: () => void
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 8 },
-  book: { fontFamily: fonts.sansBold, fontSize: 12, color: colors.muted },
+  book: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.muted },
   chapter: { fontFamily: fonts.serif, fontSize: 15, color: colors.text },
   aa: { fontFamily: fonts.serif, fontSize: 18, color: colors.text },
   banner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, padding: 10, borderRadius: 14, backgroundColor: colors.tint },
-  bannerText: { fontFamily: fonts.sans, fontSize: 12, color: colors.text },
-  undo: { fontFamily: fonts.sansHeavy, fontSize: 12.5, color: colors.accent },
+  bannerText: { fontFamily: fonts.sans, fontSize: 13, color: colors.text },
+  undo: { fontFamily: fonts.sansHeavy, fontSize: 13, color: colors.accent },
   text: { paddingHorizontal: 22, paddingVertical: 20 },
   sentence: { fontFamily: fonts.sans, color: colors.muted },
   read: { color: colors.subtle },
   now: { color: colors.text, fontFamily: fonts.sansBold, backgroundColor: colors.tint },
   jump: { position: 'absolute', alignSelf: 'center', bottom: 12, flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: colors.accent, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 99 },
-  jumpText: { fontFamily: fonts.sansHeavy, fontSize: 12, color: colors.onAccent },
+  jumpText: { fontFamily: fonts.sansHeavy, fontSize: 13, color: colors.onAccent },
   controls: { paddingHorizontal: 20, paddingBottom: 10, gap: 6 },
   times: { flexDirection: 'row', justifyContent: 'space-between' },
-  time: { fontFamily: fonts.sans, fontSize: 11, color: colors.muted },
+  time: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginVertical: 6 },
   ctl: { padding: 10 },
   play: { width: 68, height: 68, borderRadius: 34, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   pillBtn: { flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: colors.surf2, paddingVertical: 9, paddingHorizontal: 15, borderRadius: 99, alignSelf: 'center' },
-  pillText: { fontFamily: fonts.sansBold, fontSize: 12.5, color: colors.text },
-});
+  pillText: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },
+}));
