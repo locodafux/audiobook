@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { formatClock, formatDuration, formatSpeed } from '../format';
 import type { PlayerController, PlayerState } from '../player/controller';
 import { TEXT_SIZES, type Settings, type SettingsStore } from '../settings/settings';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { Pills, Sheet } from '../ui/Sheet';
 
 const SPEEDS = [0.8, 1, 1.1, 1.25, 1.5, 1.75, 2].map((value) => ({ value, label: formatSpeed(value) }));
@@ -91,14 +91,14 @@ export function ReadingSheet({ settings, store, onClose }: { settings: Settings;
   );
 }
 
-const styles = StyleSheet.create({
-  hint: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 17, color: colors.muted, marginTop: 8 },
+const styles = themedStyles(() => StyleSheet.create({
+  hint: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 8 },
   status: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14, flexWrap: 'wrap' },
   actions: { marginTop: 10 },
   link: { paddingVertical: 8 },
-  linkText: { fontFamily: fonts.sansHeavy, fontSize: 12.5, color: colors.accent },
+  linkText: { fontFamily: fonts.sansHeavy, fontSize: 13, color: colors.accent },
   chapter: { flexDirection: 'row', gap: 14, paddingVertical: 10, alignItems: 'center' },
   num: { width: 28, fontFamily: fonts.sansBold, fontSize: 13, color: colors.subtle },
   chTitle: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },
-});
+}));

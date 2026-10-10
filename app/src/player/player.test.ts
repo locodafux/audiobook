@@ -142,6 +142,21 @@ describe('player', () => {
     expect(t.player.state.get().position).toBe(24);
   });
 
+  it('skips by chapter: next opens the next one, previous restarts first and then goes back', async () => {
+    const t = setup();
+    await t.player.open(book, chapters, 2, true);
+    await t.player.nextChapter();
+    expect(t.player.state.get().chapterN).toBe(3);
+    t.player.seekTo(10);
+    await t.player.prevChapter(); // more than 3 s in: back to the start of this chapter
+    expect(t.player.state.get()).toMatchObject({ chapterN: 3, position: 0 });
+    await t.player.prevChapter();
+    expect(t.player.state.get().chapterN).toBe(2);
+    await t.player.openChapter(1);
+    await t.player.prevChapter(); // first chapter: stays put
+    expect(t.player.state.get()).toMatchObject({ chapterN: 1, position: 0 });
+  });
+
   it('saves the place while playing, on pause, and resumes there after a restart', async () => {
     const t = setup();
     await t.player.open(book, chapters, 2, true);

@@ -18,7 +18,7 @@ import {
   themeLabel,
 } from '../settings/labels';
 import { summarizeStorage, type StoragePort, type StorageUsage } from '../storage/ports';
-import { accents, colors, fonts, palettes } from '../theme';
+import { accents, colors, fonts, palettes, themedStyles } from '../theme';
 import { Button, Callout } from '../ui/kit';
 import { BackHeader, ChoiceRow, ConfirmDialog, Group, Segmented, SwitchRow } from '../ui/settingsKit';
 
@@ -153,12 +153,12 @@ export function DownloadsSettings({
   );
 }
 
-/** Theme, accent, text size, follow-the-audio (wireframe G5). Theme and accent apply when the app next opens. */
+/** Theme, accent, text size, follow-the-audio (wireframe G5). Theme and accent apply at once. */
 export function AppearanceSettings({ onBack }: { onBack: () => void }) {
   const { settings } = usePhone();
   const s = useStore(settings);
   const mode = s.theme === 'light' ? 'light' : s.theme === 'black' ? 'black' : 'dark';
-  // "System" previews as dark; the real choice follows the phone when the app opens.
+  // "System" previews as dark; the app itself follows the phone.
   const pal = palettes[mode];
   const accent = accents[s.accent][mode === 'light' ? 'light' : 'dark'];
   return (
@@ -171,7 +171,6 @@ export function AppearanceSettings({ onBack }: { onBack: () => void }) {
       <Group title="Theme">
         <View style={styles.pad}>
           <Segmented value={s.theme} options={THEMES} label={themeLabel} onChange={(v) => settings.update({ theme: v })} />
-          <Text style={styles.hint}>Takes effect the next time you open the app.</Text>
         </View>
       </Group>
       <Group title="Accent colour">
@@ -198,15 +197,15 @@ export function AppearanceSettings({ onBack }: { onBack: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   speed: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   speedValue: { fontFamily: fonts.serif, fontSize: 30, color: colors.text },
   step: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.surf2, alignItems: 'center', justifyContent: 'center' },
   presets: { flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
   preset: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 99, backgroundColor: colors.surf2 },
-  presetText: { fontFamily: fonts.sansBold, fontSize: 12, color: colors.muted },
-  hint: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 16, color: colors.muted, padding: 16, paddingTop: 10 },
+  presetText: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.muted },
+  hint: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 18, color: colors.muted, padding: 16, paddingTop: 10 },
   storage: { padding: 16, paddingBottom: 12 },
   pad: { padding: 14 },
   preview: { marginHorizontal: 20, marginTop: 6, padding: 18, borderRadius: 20 },
@@ -214,4 +213,4 @@ const styles = StyleSheet.create({
   swatches: { flexDirection: 'row', gap: 14 },
   swatch: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   swatchOn: { borderWidth: 3, borderColor: colors.text },
-});
+}));

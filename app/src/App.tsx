@@ -7,7 +7,7 @@ import { Fraunces_700Bold } from '@expo-google-fonts/fraunces/700Bold';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Fragment, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -23,9 +23,10 @@ import { PendingScreen } from './screens/PendingScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { createServices } from './services';
 import { ServicesProvider, type Services } from './servicesContext';
+import { useAppearance } from './settings/appearance';
 import { Shell } from './Shell';
 import { createSupabaseClient } from './supabase';
-import { colors, fonts, statusBarStyle } from './theme';
+import { colors, fonts, statusBarStyle, themedStyles } from './theme';
 
 const config = readConfig();
 
@@ -59,6 +60,7 @@ function SignedInGate({ config }: { config: NonNullable<ReturnType<typeof readCo
     return { client, library: supabaseLibrary(client), profileApi: supabaseProfile(client), adminApi: supabaseAdmin(client), controller: createSignInController(supabaseAuth(client)) };
   }, [config]);
   const state = useSyncExternalStore(controller.subscribe, controller.getState);
+  const themeKey = useAppearance();
 
   useEffect(() => {
     void controller.start();
@@ -80,20 +82,27 @@ function SignedInGate({ config }: { config: NonNullable<ReturnType<typeof readCo
     };
   }, [client, controller]);
 
-  if (state.name === 'signed_in') {
-    return <SignedIn client={client} username={state.username} library={library} profileApi={profileApi} adminApi={adminApi} onSignOut={() => void controller.signOut()} />;
-  }
-  if (state.name === 'pending') {
-    return <PendingScreen username={state.username} onCheck={() => controller.recheckAccess()} onSignOut={() => void controller.signOut()} />;
-  }
-  if (state.name === 'access_ended') {
-    return <AccessEndedScreen onSignOut={() => void controller.signOut()} />;
-  }
-  return <SignInScreen state={state} controller={controller} />;
+  const screen =
+    state.name === 'signed_in' ? (
+      <SignedIn client={client} username={state.username} library={library} profileApi={profileApi} adminApi={adminApi} onSignOut={() => void controller.signOut()} themeKey={themeKey} />
+    ) : state.name === 'pending' ? (
+      <PendingScreen username={state.username} onCheck={() => controller.recheckAccess()} onSignOut={() => void controller.signOut()} />
+    ) : state.name === 'access_ended' ? (
+      <AccessEndedScreen onSignOut={() => void controller.signOut()} />
+    ) : (
+      <SignInScreen state={state} controller={controller} />
+    );
+  // The sign-in screens remount on a theme change; the signed-in app does it inside Shell, to keep its place.
+  return (
+    <Fragment key={state.name === 'signed_in' ? 0 : themeKey}>
+      <StatusBar style={statusBarStyle()} />
+      {screen}
+    </Fragment>
+  );
 }
 
 /** Builds the player and downloads once per sign-in, then shows the app. */
-function SignedIn({ client, username, library, profileApi, adminApi, onSignOut }: { client: SupabaseClient; username: string; library: LibraryApi; profileApi: ProfileApi; adminApi: AdminApi; onSignOut: () => void }) {
+function SignedIn({ client, username, library, profileApi, adminApi, onSignOut, themeKey }: { client: SupabaseClient; username: string; library: LibraryApi; profileApi: ProfileApi; adminApi: AdminApi; onSignOut: () => void; themeKey: number }) {
   const phone = usePhone();
   const [services, setServices] = useState<Services | null>(null);
   useEffect(() => {
@@ -114,13 +123,13 @@ function SignedIn({ client, username, library, profileApi, adminApi, onSignOut }
   if (!services) return null;
   return (
     <ServicesProvider value={services}>
-      <Shell username={username} library={library} profileApi={profileApi} adminApi={adminApi} onSignOut={onSignOut} />
+      <Shell username={username} library={library} profileApi={profileApi} adminApi={adminApi} onSignOut={onSignOut} themeKey={themeKey} />
     </ServicesProvider>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
   center: { alignItems: 'center', justifyContent: 'center', padding: 30 },
   error: { fontFamily: fonts.sans, color: colors.text, textAlign: 'center', lineHeight: 20 },
-});
+}));

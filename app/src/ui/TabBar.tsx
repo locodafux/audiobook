@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import type { IconName } from './kit';
 
 export type TabKey = 'home' | 'browse' | 'downloads' | 'you';
@@ -41,9 +41,9 @@ export function TabBar({ active, onChange }: { active: TabKey; onChange: (tab: T
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   wrap: { paddingHorizontal: 12, paddingTop: 4, backgroundColor: colors.bg },
   bar: { flexDirection: 'row', backgroundColor: colors.surf, borderRadius: 26, padding: 6, borderWidth: 1, borderColor: colors.line },
   tab: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 6, borderRadius: 20 },
-  label: { fontFamily: fonts.sansBold, fontSize: 9.5 },
-});
+  label: { fontFamily: fonts.sansBold, fontSize: 11.5 },
+}));

@@ -6,7 +6,7 @@ import type { BookRow } from '../data/types';
 import { usePhone } from '../phone/PhoneProvider';
 import { useStore } from '../phone/persisted';
 import { formatListened, summarize } from '../stats/stats';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { EmptyState } from '../ui/kit';
 import { BackHeader, Group, Row } from '../ui/settingsKit';
 
@@ -48,12 +48,12 @@ const Tile = ({ value, label }: { value: string; label: string }) => (
   </View>
 );
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 20, marginTop: 6 },
   tile: { width: '47.5%', backgroundColor: colors.surf, borderRadius: 18, padding: 14 },
   value: { fontFamily: fonts.serif, fontSize: 22, color: colors.text },
-  label: { fontFamily: fonts.sansBold, fontSize: 11, color: colors.muted, marginTop: 2 },
-  note: { fontFamily: fonts.sans, fontSize: 11.5, color: colors.muted, marginHorizontal: 20, marginTop: 12 },
-  time: { fontFamily: fonts.sansBold, fontSize: 12, color: colors.muted },
-});
+  label: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.muted, marginTop: 2 },
+  note: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted, marginHorizontal: 20, marginTop: 12 },
+  time: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.muted },
+}));

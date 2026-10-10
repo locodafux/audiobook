@@ -4,7 +4,7 @@ import { Linking, Pressable, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import appJson from '../../app.json';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { checkForUpdate, type Update } from './updates';
 
 const installed = appJson.expo.android.versionCode;
@@ -34,8 +34,8 @@ export function UpdateBanner({ check = () => checkForUpdate(installed) }: { chec
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { backgroundColor: colors.tint },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10 },
   text: { flex: 1, color: colors.text, fontFamily: fonts.sans, fontSize: 14 },
-});
+}));

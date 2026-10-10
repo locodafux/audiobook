@@ -4,7 +4,7 @@ import type { LibraryEntry } from '../data/series';
 import { entryBook } from '../data/series';
 import type { BookRow } from '../data/types';
 import { formatDuration, plural } from '../format';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { Cover } from '../ui/Cover';
 
 export const entryTitle = (e: LibraryEntry) => (e.kind === 'series' ? e.title : e.book.title);
@@ -76,12 +76,12 @@ export function BookRowItem({ entry, onPress }: { entry: LibraryEntry; onPress: 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   tile: { flex: 1, minWidth: 0, maxWidth: '50%' },
-  title: { fontFamily: fonts.sansBold, fontSize: 12.5, color: colors.text, marginTop: 8 },
-  author: { fontFamily: fonts.sans, fontSize: 11, color: colors.muted, marginTop: 1 },
-  sub: { fontFamily: fonts.sans, fontSize: 10.5, color: colors.subtle, marginTop: 2 },
+  title: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text, marginTop: 8 },
+  author: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted, marginTop: 1 },
+  sub: { fontFamily: fonts.sans, fontSize: 12, color: colors.subtle, marginTop: 2 },
   row: { flexDirection: 'row', gap: 12, paddingVertical: 10, paddingHorizontal: 20, alignItems: 'center' },
   stack: { width: 62, height: 78 },
   stacked: { position: 'absolute' },
-});
+}));

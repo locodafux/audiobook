@@ -56,11 +56,26 @@ const hexToRgba = (hex: string, alpha: number) => {
 };
 
 /**
- * Live colours. Styles read these when each screen module loads, so a change of theme or accent
- * is applied by `applyAppearance` once at startup (before the app loads); the settings screen says
- * it takes effect the next time the app opens.
+ * Live colours. `applyAppearance` rewrites them in place and bumps `themeVersion`; screens re-read
+ * them when they render, and `themedStyles` rebuilds a style sheet the first time it is read after a bump.
  */
 export const colors: Palette = { ...dark };
+
+let version = 0;
+/** Changes every time `applyAppearance` actually changes a colour. */
+export const themeVersion = () => version;
+
+/** A style sheet written in terms of `colors`: same object each render, rebuilt after a theme or accent change. */
+export function themedStyles<T extends object>(make: () => T): T {
+  let built: T | undefined;
+  let builtFor = -1;
+  return new Proxy({} as T, {
+    get(_, key) {
+      if (builtFor !== version || !built) [built, builtFor] = [make(), version];
+      return built[key as keyof T];
+    },
+  });
+}
 
 /** Sets `colors` for the chosen theme and accent; returns whether the result is light (for the status bar). */
 export function applyAppearance(
@@ -69,13 +84,12 @@ export function applyAppearance(
   systemScheme: string | null | undefined,
 ): 'light' | 'dark' {
   const mode = theme === 'system' ? (systemScheme === 'light' ? 'light' : 'dark') : theme;
-  const base = palettes[mode];
   const accentHex = accents[accent][mode === 'light' ? 'light' : 'dark'];
-  Object.assign(colors, base, {
-    accent: accentHex,
-    onAccent: mode === 'light' ? '#ffffff' : '#07130f',
-    tint: hexToRgba(accentHex, 0.14),
-  });
+  const next: Palette = { ...palettes[mode], accent: accentHex, onAccent: mode === 'light' ? '#ffffff' : '#07130f', tint: hexToRgba(accentHex, 0.14) };
+  if ((Object.keys(next) as (keyof Palette)[]).some((k) => next[k] !== colors[k])) {
+    Object.assign(colors, next);
+    version++;
+  }
   return mode === 'light' ? 'light' : 'dark';
 }
 

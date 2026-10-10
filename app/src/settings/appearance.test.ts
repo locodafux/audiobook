@@ -1,6 +1,6 @@
 import { Appearance } from 'react-native';
 
-import { accents, applyAppearance, colors, palettes, statusBarStyle } from '../theme';
+import { accents, applyAppearance, colors, palettes, statusBarStyle, themedStyles } from '../theme';
 import { memoryStore } from '../phone/memoryStore';
 import { loadAppearance } from './appearance';
 import { SETTINGS_KEY } from './settings';
@@ -8,6 +8,23 @@ import { SETTINGS_KEY } from './settings';
 jest.spyOn(Appearance, 'getColorScheme').mockReturnValue('light');
 
 afterEach(() => applyAppearance('dark', 'jade', 'dark'));
+
+describe('themedStyles', () => {
+  it('is rebuilt when the colours change, and reused while they do not', () => {
+    applyAppearance('dark', 'jade', null);
+    const make = jest.fn(() => ({ box: { backgroundColor: colors.bg } }));
+    const styles = themedStyles(make);
+    expect(styles.box.backgroundColor).toBe(palettes.dark.bg);
+    expect(styles.box).toBe(styles.box);
+    expect(make).toHaveBeenCalledTimes(1);
+    applyAppearance('dark', 'jade', null); // nothing changed
+    expect(styles.box.backgroundColor).toBe(palettes.dark.bg);
+    expect(make).toHaveBeenCalledTimes(1);
+    applyAppearance('light', 'jade', null);
+    expect(styles.box.backgroundColor).toBe(palettes.light.bg);
+    expect(make).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe('appearance', () => {
   it('applies theme and accent to the live colours', () => {

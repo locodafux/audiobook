@@ -7,7 +7,7 @@ import { useStore } from '../phone/persisted';
 import type { Profile } from '../profile/profile';
 import { accentLabel, themeLabel } from '../settings/labels';
 import { formatListened, summarize } from '../stats/stats';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { Button, ScreenTitle } from '../ui/kit';
 import { ConfirmDialog, Group, Row } from '../ui/settingsKit';
 
@@ -109,19 +109,19 @@ export function YouScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   card: { flexDirection: 'row', gap: 12, alignItems: 'center', marginHorizontal: 20, marginTop: 6, padding: 14, backgroundColor: colors.surf, borderRadius: 20 },
   avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: fonts.sansHeavy, fontSize: 18, color: colors.onAccent },
   name: { fontFamily: fonts.sansBold, fontSize: 15, color: colors.text },
-  email: { fontFamily: fonts.sans, fontSize: 11.5, color: colors.muted, marginTop: 1 },
+  email: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted, marginTop: 1 },
   card2: { marginHorizontal: 20, marginTop: 12, padding: 16, backgroundColor: colors.surf, borderRadius: 20 },
-  kicker: { fontFamily: fonts.sansHeavy, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: colors.muted },
+  kicker: { fontFamily: fonts.sansHeavy, fontSize: 11.5, letterSpacing: 1, textTransform: 'uppercase', color: colors.muted },
   big: { fontFamily: fonts.serif, fontSize: 26, color: colors.text, marginTop: 4 },
-  small: { fontFamily: fonts.sans, fontSize: 12, color: colors.muted },
+  small: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted },
   bars: { flexDirection: 'row', gap: 8, marginTop: 14, alignItems: 'flex-end', height: 64 },
   barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   bar: { width: '100%', borderRadius: 6 },
-  day: { fontFamily: fonts.sansBold, fontSize: 10, color: colors.subtle },
-});
+  day: { fontFamily: fonts.sansBold, fontSize: 11.5, color: colors.subtle },
+}));

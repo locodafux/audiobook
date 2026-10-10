@@ -4,8 +4,8 @@ import { useEffect, useState, type ComponentType } from 'react';
 import { loadAppearance } from './settings/appearance';
 
 /**
- * The registered root. Screens build their styles from `colors` when their module loads, so the saved
- * theme and accent are applied first and the app (and with it every screen module) is imported after.
+ * The registered root. The saved theme and accent are applied first so the very first frame already has
+ * the right colours; after that `useAppearance` keeps them current.
  */
 export default function Root() {
   const [App, setApp] = useState<ComponentType | null>(null);

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors } from '../theme';
+import { colors, themedStyles } from '../theme';
 import { Button, EmptyState } from '../ui/kit';
 
 /** Registered but not approved yet: the server shows this person nothing until an admin says yes. */
@@ -34,7 +34,7 @@ export function PendingScreen({ username, onCheck, onSignOut }: { username: stri
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   body: { flex: 1, justifyContent: 'center' },
-});
+}));

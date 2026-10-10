@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 
-import { colors } from '../theme';
+import { colors, themedStyles } from '../theme';
 
 const STEP = 0.05; // screen-reader increment/decrement: 5% of the bar
 
@@ -37,9 +37,9 @@ export function Slider({ value, onCommit, label }: { value: number; onCommit: (v
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   hit: { height: 32, justifyContent: 'center' },
   track: { height: 5, borderRadius: 3, backgroundColor: colors.raised, overflow: 'hidden' },
   fill: { height: 5, backgroundColor: colors.accent },
   knob: { position: 'absolute', width: 16, height: 16, borderRadius: 8, marginLeft: -8, backgroundColor: colors.accent },
-});
+}));

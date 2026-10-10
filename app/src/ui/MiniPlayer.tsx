@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useServices } from '../servicesContext';
 import { useStore } from '../store';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 
 /** The strip above the tab bar while a book is open: tap to expand, button to play or pause. */
 export function MiniPlayer({ onOpen }: { onOpen: () => void }) {
@@ -39,11 +39,11 @@ function Strip({ services, onOpen }: { services: NonNullable<ReturnType<typeof u
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   wrap: { paddingHorizontal: 12, paddingTop: 6, backgroundColor: colors.bg },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surf2, borderRadius: 20, paddingVertical: 10, paddingHorizontal: 14, overflow: 'hidden' },
   title: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },
-  sub: { fontFamily: fonts.sans, fontSize: 11, color: colors.muted },
+  sub: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted },
   btn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   progress: { position: 'absolute', left: 0, bottom: 0, height: 2, backgroundColor: colors.accent },
-});
+}));

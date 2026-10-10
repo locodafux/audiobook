@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { SignInController } from '../auth/signInController';
 import type { EntryError, SignInState } from '../auth/signInMachine';
 import { MIN_PASSWORD } from '../auth/username';
-import { colors } from '../theme';
+import { colors, themedStyles } from '../theme';
 import { Button, Callout, Field, textStyles } from '../ui/kit';
 
 const messages: Record<EntryError, string> = {
@@ -107,9 +107,10 @@ export function SignInScreen({ state, controller }: { state: SignInState; contro
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   center: { alignItems: 'center', justifyContent: 'center', gap: 16, padding: 30 },
   frame: { padding: 26, paddingTop: 40, gap: 14 },
-  logo: { width: 54, height: 54, borderRadius: 18 },
-});
+  // The icon's top edge is the same near-black as the app background, so the tile gets a visible rim.
+  logo: { width: 54, height: 54, borderRadius: 18, borderWidth: 1.5, borderColor: colors.accent },
+}));

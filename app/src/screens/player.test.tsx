@@ -68,6 +68,16 @@ describe('Player screen', () => {
     expect(engine.position).toBe(8);
   });
 
+  it('the outer buttons skip chapters, not sentences', async () => {
+    const { s } = services([1, 2]);
+    await render(wrap(s, <PlayerScreen onClose={jest.fn()} />));
+    await act(() => s.player.open(book, chapters, 1));
+    await fireEvent.press(screen.getByLabelText('Next chapter'));
+    expect(s.player.state.get().chapterN).toBe(2);
+    await fireEvent.press(screen.getByLabelText('Previous chapter'));
+    expect(s.player.state.get().chapterN).toBe(1);
+  });
+
   it('says when the chapter is not on the phone and offers the download', async () => {
     const { s } = services([1]);
     await render(wrap(s, <PlayerScreen onClose={jest.fn()} />));

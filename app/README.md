@@ -15,7 +15,7 @@ Offline: the book list is saved on the phone after every successful load and sho
 Phone-only data (plan section 3) lives in three small stores created by `createPhone` (`src/phone/PhoneProvider.tsx`) and read anywhere with `usePhone()`:
 settings (`src/settings`, includes `speedFor(settings, bookId)` and `smartRewindS`), bookmarks (`src/bookmarks`) and listening stats (`src/stats`; the player calls `stats.record(bookId, secondsPlayed)`).
 The Downloads and storage screens talk to the download/storage worker through the interfaces in `src/storage/ports.ts` (`Shell` takes `ports`; `stubPorts` shows empty states until they are wired).
-Theme and accent are applied once at startup (`src/Root.tsx`), so changing them takes effect the next time the app opens.
+Theme and accent are applied at startup (`src/Root.tsx`) and again whenever they change (`useAppearance` in `src/settings/appearance.ts`): styles that use `colors` are built with `themedStyles` (`src/theme.ts`) so they are rebuilt, and the screens remount, with the new colours.
 
 ## Player and downloads
 

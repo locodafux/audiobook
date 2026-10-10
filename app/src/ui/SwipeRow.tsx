@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import type { IconName } from './kit';
 
 export type SwipeAction = { label: string; icon: IconName; onPress: () => void; tone?: 'danger' };
@@ -74,9 +74,9 @@ export function SwipeRow({ actions, children }: { actions: SwipeAction[]; childr
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   front: { backgroundColor: colors.bg },
   actions: { position: 'absolute', top: 0, bottom: 0, right: 0, flexDirection: 'row' },
   action: { width: ACTION_W, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  actionText: { fontFamily: fonts.sansHeavy, fontSize: 10.5 },
-});
+  actionText: { fontFamily: fonts.sansHeavy, fontSize: 12 },
+}));

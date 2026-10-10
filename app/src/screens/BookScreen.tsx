@@ -13,7 +13,7 @@ import { downloadedAsRows } from '../downloads/store';
 import { formatBytes, formatDuration, plural } from '../format';
 import { useServices, type Services } from '../servicesContext';
 import { useStore } from '../store';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themedStyles } from '../theme';
 import { Cover } from '../ui/Cover';
 import { Button, EmptyState } from '../ui/kit';
 import { Segmented } from '../ui/settingsKit';
@@ -238,7 +238,7 @@ const Stat = ({ value, label }: { value: string; label: string }) => (
   </View>
 );
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   back: { padding: 12, alignSelf: 'flex-start' },
   head: { alignItems: 'center', gap: 6, paddingHorizontal: 20 },
@@ -247,17 +247,17 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', gap: 10, marginHorizontal: 20, marginTop: 16 },
   stat: { flex: 1, backgroundColor: colors.surf, borderRadius: 16, paddingVertical: 10, alignItems: 'center' },
   statValue: { fontFamily: fonts.serif, fontSize: 18, color: colors.text },
-  statLabel: { fontFamily: fonts.sansBold, fontSize: 10.5, color: colors.muted },
+  statLabel: { fontFamily: fonts.sansBold, fontSize: 12, color: colors.muted },
   volumes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginHorizontal: 20, marginTop: 14 },
   chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 99, backgroundColor: colors.surf },
   chipOn: { backgroundColor: colors.text },
-  chipText: { fontFamily: fonts.sansBold, fontSize: 11.5, color: colors.muted },
+  chipText: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.muted },
   about: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 20, color: colors.muted, marginHorizontal: 20, marginTop: 14 },
   actions: { flexDirection: 'row', gap: 10, marginHorizontal: 20, marginTop: 16 },
   chapter: { flexDirection: 'row', gap: 14, paddingVertical: 10, paddingHorizontal: 20, alignItems: 'center' },
   num: { width: 28, fontFamily: fonts.sansBold, fontSize: 13, color: colors.subtle },
   chTitle: { fontFamily: fonts.sansBold, fontSize: 13, color: colors.text },
   failed: { maxWidth: 120, alignItems: 'flex-end', gap: 2 },
-  failedText: { fontFamily: fonts.sans, fontSize: 11, color: colors.danger, textAlign: 'right' },
-  chMeta: { fontFamily: fonts.sans, fontSize: 11, color: colors.muted, marginTop: 2 },
-});
+  failedText: { fontFamily: fonts.sans, fontSize: 13, color: colors.danger, textAlign: 'right' },
+  chMeta: { fontFamily: fonts.sans, fontSize: 13, color: colors.muted, marginTop: 2 },
+}));
