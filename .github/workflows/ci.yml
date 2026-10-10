@@ -91,7 +91,7 @@ jobs:
           deno-version: v2.x
       - run: deno fmt --check
       - run: deno lint
-      - run: deno test --frozen
+      - run: deno test --frozen --allow-net=127.0.0.1
 
   accounts-function:
     runs-on: ubuntu-latest

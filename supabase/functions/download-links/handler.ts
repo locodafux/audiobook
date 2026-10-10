@@ -1,7 +1,11 @@
-// download-links: hands a signed-in, still-invited member short-lived R2 links.
-// Pure logic with injected db + signer so tests need no network. Wiring is in index.ts.
+// download-links: hands a signed-in, active member direct Telegram download links.
+// Pure logic with injected db + Telegram lookup so tests need no network. Wiring is in index.ts.
+//
+// The link is https://api.telegram.org/file/bot<token>/<path>, so the bot token travels to every
+// approved member's phone. That is an accepted risk (docs/decisions.md). Telegram keeps a path valid
+// for at least an hour; the app asks again for every download, so links are reported as short-lived.
 
-export const EXPIRES_S = 900;
+export const EXPIRES_S = 1800;
 export const MAX_CHAPTERS = 25;
 export const MAX_BOOKS = 50;
 
@@ -10,20 +14,22 @@ export interface ChapterRow {
   status: string;
   bytes: number | null;
   audio_sha256: string | null;
-  audio_key: string | null;
-  timing_key: string | null;
+  telegram_audio_file_id: string | null;
+  telegram_timing_file_id: string | null;
 }
 export interface BookRow {
   id: string;
   status: string;
-  cover_key: string | null;
+  cover_file_id: string | null;
+  /** null = every active member; otherwise only that member. */
+  private_to: string | null;
 }
 export interface Deps {
   memberStatus(userId: string): Promise<string | null>;
   books(ids: string[]): Promise<BookRow[]>;
   chapters(bookId: string, ns: number[]): Promise<ChapterRow[]>;
-  /** Presigned GET for one R2 key, valid EXPIRES_S seconds. */
-  sign(key: string): Promise<string>;
+  /** getFile, then the direct download URL. null = Telegram no longer has that file. Throws when Telegram is unreachable. */
+  telegramUrl(fileId: string): Promise<string | null>;
 }
 
 const json = (status: number, body: unknown) =>
@@ -88,39 +94,55 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     bookIds = [...new Set(b as string[])];
   }
 
-  // Revoked (or never invited) is refused even with a still-valid token.
+  // Pending, revoked (or never invited) is refused even with a still-valid token.
   if (await deps.memberStatus(userId) !== "active") return json(403, { error: "access_ended" });
 
-  if (wantCovers) {
-    const rows = new Map((await deps.books(bookIds)).map((r) => [r.id, r]));
-    const covers = await Promise.all(bookIds.map(async (id) => {
-      const r = rows.get(id);
-      if (!r || r.status !== "published" || !r.cover_key) {
-        return { book_id: id, error: "not_available" };
-      }
-      return { book_id: id, url: await deps.sign(r.cover_key) };
-    }));
-    return json(200, { expires_in: EXPIRES_S, covers });
+  // A private book answers exactly like a missing one, so its existence does not leak.
+  const visible = (b: BookRow | undefined) =>
+    b?.status === "published" && (!b.private_to || b.private_to === userId);
+
+  try {
+    return await answer();
+  } catch {
+    // Telegram unreachable or the database failed. Say nothing about why: errors name URLs with the token.
+    return json(502, { error: "storage_unavailable" });
   }
 
-  const [book] = await deps.books([bookId]);
-  if (book?.status !== "published") {
-    return json(200, {
-      expires_in: EXPIRES_S,
-      chapters: ns.map((n) => ({ n, error: "not_available" })),
-    });
-  }
-  const rows = new Map((await deps.chapters(bookId, ns)).map((r) => [r.n, r]));
-  const chapters = await Promise.all(ns.map(async (n) => {
-    const r = rows.get(n);
-    if (!r || r.status !== "ready" || !r.audio_key || !r.timing_key) {
-      return { n, error: "not_available" };
+  async function answer(): Promise<Response> {
+    if (wantCovers) {
+      const rows = new Map((await deps.books(bookIds)).map((r) => [r.id, r]));
+      const covers = await Promise.all(bookIds.map(async (id) => {
+        const r = rows.get(id);
+        const url = visible(r) && r!.cover_file_id
+          ? await deps.telegramUrl(r!.cover_file_id)
+          : null;
+        return url ? { book_id: id, url } : { book_id: id, error: "not_available" };
+      }));
+      return json(200, { expires_in: EXPIRES_S, covers });
     }
-    const [audio_url, timing_url] = await Promise.all([
-      deps.sign(r.audio_key),
-      deps.sign(r.timing_key),
-    ]);
-    return { n, audio_url, timing_url, bytes: r.bytes, sha256: r.audio_sha256 };
-  }));
-  return json(200, { expires_in: EXPIRES_S, chapters });
+
+    const [book] = await deps.books([bookId]);
+    if (!visible(book)) {
+      return json(200, {
+        expires_in: EXPIRES_S,
+        chapters: ns.map((n) => ({ n, error: "not_available" })),
+      });
+    }
+    const rows = new Map((await deps.chapters(bookId, ns)).map((r) => [r.n, r]));
+    const chapters = await Promise.all(ns.map(async (n) => {
+      const r = rows.get(n);
+      if (
+        !r || r.status !== "ready" || !r.telegram_audio_file_id || !r.telegram_timing_file_id
+      ) {
+        return { n, error: "not_available" };
+      }
+      const [audio_url, timing_url] = await Promise.all([
+        deps.telegramUrl(r.telegram_audio_file_id),
+        deps.telegramUrl(r.telegram_timing_file_id),
+      ]);
+      if (!audio_url || !timing_url) return { n, error: "not_available" };
+      return { n, audio_url, timing_url, bytes: r.bytes, sha256: r.audio_sha256 };
+    }));
+    return json(200, { expires_in: EXPIRES_S, chapters });
+  }
 }

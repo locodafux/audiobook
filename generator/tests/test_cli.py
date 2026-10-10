@@ -17,10 +17,12 @@ def test_banner_says_loudly_which_environment(capsys):
 
 
 def test_missing_settings_exit_code_2_and_names_only(monkeypatch, capsys):
-    monkeypatch.setattr("hearthread.cli.load_env", lambda prod: {"R2_BUCKET": "secret-value"})
+    monkeypatch.setattr(
+        "hearthread.cli.load_env", lambda prod: {"TELEGRAM_BOT_TOKEN": "secret-value"}
+    )
     assert cli.main(["status"]) == 2
     err = capsys.readouterr().err
-    assert "SUPABASE_URL" in err and "secret-value" not in err
+    assert "SUPABASE_DB_URL" in err and "secret-value" not in err
 
 
 @needs_ffmpeg

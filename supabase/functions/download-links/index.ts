@@ -1,37 +1,29 @@
-// Edge Function entry: wires the real database (PostgREST, service key) and R2 signer.
-// Secrets by name: R2_ACCOUNT_ID, R2_BUCKET, R2_READ_KEY_ID, R2_READ_SECRET
-// (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected by the platform).
-import { AwsClient } from "aws4fetch";
-import { type BookRow, type ChapterRow, type Deps, EXPIRES_S, handle } from "./handler.ts";
+// Edge Function entry: wires the real database (PostgREST, service key) and Telegram.
+// Secret by name: TELEGRAM_BOT_TOKEN (a Supabase function secret, never committed).
+// SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected by the platform.
+// The download URL contains the bot token, so nothing here logs it: Telegram errors are replaced by a
+// fixed message, and anything logged has the token and service key scrubbed.
+import { type BookRow, type ChapterRow, type Deps, handle } from "./handler.ts";
 
-const env = (name: string) => {
+export const TELEGRAM_API = "https://api.telegram.org";
+
+type Env = (name: string) => string;
+const denoEnv: Env = (name) => {
   const v = Deno.env.get(name);
   if (!v) throw new Error(`missing env ${name}`);
   return v;
 };
 
-export function r2Signer(account: string, bucket: string, keyId: string, secret: string) {
-  const aws = new AwsClient({
-    accessKeyId: keyId,
-    secretAccessKey: secret,
-    service: "s3",
-    region: "auto",
-  });
-  const base = `https://${account}.r2.cloudflarestorage.com/${bucket}/`;
-  return async (key: string) => {
-    const path = key.split("/").map(encodeURIComponent).join("/");
-    const url = new URL(base + path);
-    url.searchParams.set("X-Amz-Expires", String(EXPIRES_S));
-    const signed = await aws.sign(new Request(url), { aws: { signQuery: true } });
-    return signed.url;
-  };
-}
-
-function realDeps(): Deps {
-  const rest = env("SUPABASE_URL") + "/rest/v1/";
+export function realDeps(
+  env: Env = denoEnv,
+  f: typeof fetch = fetch,
+  telegramApi: string = TELEGRAM_API,
+): Deps {
+  const rest = env("SUPABASE_URL").replace(/\/+$/, "") + "/rest/v1/";
   const key = env("SUPABASE_SERVICE_ROLE_KEY");
+  const botToken = env("TELEGRAM_BOT_TOKEN");
   const get = async <T>(path: string): Promise<T[]> => {
-    const res = await fetch(rest + path, {
+    const res = await f(rest + path, {
       headers: { apikey: key, authorization: `Bearer ${key}` },
     });
     if (!res.ok) throw new Error(`db ${res.status}`);
@@ -44,33 +36,56 @@ function realDeps(): Deps {
         null,
     books: (ids) =>
       get<BookRow>(
-        `books?id=in.(${ids.map((i) => q(`"${i}"`)).join(",")})&select=id,status,cover_key`,
+        `books?id=in.(${
+          ids.map((i) => q(`"${i}"`)).join(",")
+        })&select=id,status,cover_file_id,private_to`,
       ),
     chapters: (bookId, ns) =>
       get<ChapterRow>(
         `chapters?book_id=eq.${q(bookId)}&n=in.(${ns.join(",")})` +
-          `&select=n,status,bytes,audio_sha256,audio_key,timing_key`,
+          `&select=n,status,bytes,audio_sha256,telegram_audio_file_id,telegram_timing_file_id`,
       ),
-    sign: r2Signer(
-      env("R2_ACCOUNT_ID"),
-      env("R2_BUCKET"),
-      env("R2_READ_KEY_ID"),
-      env("R2_READ_SECRET"),
-    ),
+    async telegramUrl(fileId) {
+      let res: Response;
+      try {
+        res = await f(`${telegramApi}/bot${botToken}/getFile?file_id=${q(fileId)}`);
+      } catch {
+        throw new Error("telegram unreachable"); // the original error would carry the URL
+      }
+      // Telegram says 400 for a file it no longer has, or one over the 20 MB a bot can download.
+      if (res.status === 400 || res.status === 404) {
+        await res.body?.cancel();
+        return null;
+      }
+      if (!res.ok) throw new Error(`telegram getFile ${res.status}`);
+      const path = (await res.json())?.result?.file_path;
+      if (typeof path !== "string" || !path) return null;
+      return `${telegramApi}/file/bot${botToken}/${path}`;
+    },
   };
 }
 
-if (import.meta.main) {
-  let deps: Deps | undefined;
-  Deno.serve(async (req) => {
+/** The request handler with its error policy: log a scrubbed message, answer 500, never throw. */
+export function app(deps: () => Deps, secrets: string[] = []) {
+  let ready: Deps | undefined;
+  return async (req: Request): Promise<Response> => {
     try {
-      return await handle(req, deps ??= realDeps());
+      return await handle(req, ready ??= deps());
     } catch (e) {
-      console.error(e);
+      let msg = e instanceof Error ? e.message : "error";
+      for (const s of secrets) if (s) msg = msg.replaceAll(s, "[redacted]");
+      console.error(msg);
       return new Response(JSON.stringify({ error: "server_error" }), {
         status: 500,
         headers: { "content-type": "application/json" },
       });
     }
-  });
+  };
+}
+
+if (import.meta.main) {
+  Deno.serve(app(() => realDeps(), [
+    Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+  ]));
 }

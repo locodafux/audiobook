@@ -12,10 +12,6 @@ REQUIRED = (
     "SUPABASE_URL",
     "SUPABASE_DB_URL",
     "SUPABASE_SERVICE_KEY",
-    "R2_ACCOUNT_ID",
-    "R2_BUCKET",
-    "R2_WRITE_KEY_ID",
-    "R2_WRITE_SECRET",
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_BACKUP_CHAT_ID",
 )
@@ -53,13 +49,12 @@ class Settings:
     supabase_url: str
     db_url: str
     service_key: str
-    r2_account_id: str
-    r2_bucket: str
-    r2_key_id: str
-    r2_secret: str
     telegram_token: str
     telegram_chat_id: str
     telegram_proxy: str | None = None
+    library_dir: str | None = (
+        None  # the Mac's own copy of every file; default ~/.hearthread/library
+    )
     voice: str = "en-US-BrianNeural"
     rate: str = "+0%"  # normal speed; the old generator used -5%
     volume: str = "+0%"
@@ -83,13 +78,10 @@ class Settings:
             supabase_url=env["SUPABASE_URL"].rstrip("/"),
             db_url=env["SUPABASE_DB_URL"],
             service_key=env["SUPABASE_SERVICE_KEY"],
-            r2_account_id=env["R2_ACCOUNT_ID"],
-            r2_bucket=env["R2_BUCKET"],
-            r2_key_id=env["R2_WRITE_KEY_ID"],
-            r2_secret=env["R2_WRITE_SECRET"],
             telegram_token=env["TELEGRAM_BOT_TOKEN"],
             telegram_chat_id=env["TELEGRAM_BACKUP_CHAT_ID"],
             telegram_proxy=env.get("TELEGRAM_PROXY"),
+            library_dir=env.get("HEARTHREAD_LIBRARY_DIR"),
             voice=env.get("TTS_VOICE", cls.voice),
             rate=env.get("TTS_RATE", cls.rate),
             volume=env.get("TTS_VOLUME", cls.volume),
@@ -105,6 +97,7 @@ class Settings:
 KNOWN = {
     *REQUIRED,
     "TELEGRAM_PROXY",
+    "HEARTHREAD_LIBRARY_DIR",
     "TTS_VOICE",
     "TTS_RATE",
     "TTS_VOLUME",

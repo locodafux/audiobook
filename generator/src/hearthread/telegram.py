@@ -1,16 +1,19 @@
-"""Telegram cold backup: documents to one private chat, rate limited, honouring retry_after."""
+"""Telegram audio store: documents to one private chat, rate limited, honouring retry_after."""
 
 from __future__ import annotations
 
 import asyncio
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 import httpx
 
-BOT_UPLOAD_LIMIT = 50 * 1024 * 1024  # Bot API ceiling for sendDocument
+BOT_FILE_LIMIT = (
+    20 * 1024 * 1024
+)  # Bot API getFile ceiling: a bigger upload could never be downloaded again
 MIN_INTERVAL_S = 3.1  # ~20 messages per minute per chat
 PERMANENT = ("unauthorized", "chat not found", "bot was blocked", "forbidden", "file is too big")
 
@@ -22,8 +25,17 @@ class TelegramError(RuntimeError):
         self.permanent = permanent
 
 
+@dataclass(frozen=True)
+class Sent:
+    """What Telegram answers to an upload. The file ids are what a bot needs to download it again."""
+
+    message_id: int
+    file_id: str
+    file_unique_id: str
+
+
 class Backup(Protocol):
-    async def send_document(self, path: Path, caption: str) -> int: ...
+    async def send_document(self, path: Path, caption: str) -> Sent: ...
     async def check(self) -> str: ...
 
 
@@ -75,10 +87,13 @@ class Telegram:
         )
         return f"bot @{me.get('username', '?')} -> chat {chat.get('title') or chat.get('id')}"
 
-    async def send_document(self, path: Path, caption: str) -> int:
-        """Returns the Telegram message id. Raises TelegramError (permanent flag set when useless to retry)."""
-        if path.stat().st_size > BOT_UPLOAD_LIMIT:
-            raise TelegramError(f"{path.name} is over the 50 MB bot limit", permanent=True)
+    async def send_document(self, path: Path, caption: str) -> Sent:
+        """Raises TelegramError (permanent flag set when useless to retry)."""
+        if path.stat().st_size > BOT_FILE_LIMIT:
+            raise TelegramError(
+                f"{path.name} is over the 20 MB limit a bot can download (file is too big)",
+                permanent=True,
+            )
         async with self._lock:
             last: Exception | None = None
             for attempt in range(self.max_retries):
@@ -94,7 +109,9 @@ class Telegram:
                             files={"document": (path.name, fh)},
                         )
                     self._last = self._clock()
-                    return int(self._unwrap("sendDocument", resp)["message_id"])
+                    msg = self._unwrap("sendDocument", resp)
+                    doc = msg["document"]
+                    return Sent(int(msg["message_id"]), doc["file_id"], doc["file_unique_id"])
                 except TelegramError as exc:
                     self._last = self._clock()
                     if exc.permanent:

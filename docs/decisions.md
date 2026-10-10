@@ -9,20 +9,36 @@ rework research). Approved by the captain on 2026-10-02 ("looks good").
 - Android only, English only (voice `en-US-BrianNeural`), one voice per book, chapters are
   the unit of everything. About 5 users, invite-only.
 - **Normal speed:** generator rate is `+0%` (the old generator used `-5%`).
-- **Fresh library:** books are regenerated through the new generator; old audio is not migrated.
+- **Library:** new books go through the new generator. The audio the previous app already voiced
+  (Shadow Slave) is imported once with `hearthread import-voiced`, private to the owner.
 - No admin web page; the CLI is the admin. The Mac does all generating; phones never do.
 
 ## Architecture
-- Audio and timing files and covers: private **Cloudflare R2** (`hearthread-prod`, `hearthread-dev`).
-  Phones download straight from R2 through 15-minute presigned links.
+- Audio and timing files: stored in **Telegram** (the old app's bot and a private chat). The Mac also keeps
+  every file in a local library folder, which is the real backup (Telegram may delete files). No
+  Cloudflare account is needed. Covers: not served yet (the app draws its gradient).
 - Catalog and access: **Supabase** Postgres, four tables: `members`, `books`, `chapters`, `jobs`.
   No views; safe columns are exposed with column-level grants. Sentence text is not in the
-  database (it is in the timing file in R2).
-- One Edge Function, `download-links`, checks the person is still an active member and signs
-  R2 links. It never carries audio.
-- Telegram is a cold backup only (private chat, same bot). The app and generator never read it back.
+  database (it is in the timing file).
+- The `download-links` Supabase function checks the caller is an `active` member (and the book's
+  `private_to`), asks Telegram `getFile` for each file, and returns the direct
+  `https://api.telegram.org/file/bot<token>/<path>` links. The phone downloads straight from Telegram, so
+  no audio passes through Supabase or any server of ours (that would exceed the free plan's 5 GB/month
+  egress for a ~6.5 GB book). Telegram keeps a `file_path` valid for about an hour, so the app asks for
+  fresh links for every download and resume and never stores them. Bots can download files up to 20 MB,
+  so a chapter over 20 MB is refused at upload time. The bot token is a Supabase function secret only.
+- **Accepted risk: the bot token is on every approved member's phone.** A download link contains the bot
+  token, so any approved member who inspects the app's network traffic can read it. With it they can read
+  or delete the audio chat and post as the bot. The owner was told this and accepted it, keeping the old
+  app's bot ("don't worry it's fine"). A leak is contained by revoking the token in @BotFather (the
+  Mac's local library folder is the real backup, so nothing is lost) and setting the new one with
+  `supabase secrets set`. Removing the risk later means a streaming proxy (a server holding the token)
+  in place of direct links.
+- `books.private_to` makes a book visible to one member only (the previous app's audio is imported
+  that way, for the owner).
 - The generator queue is the Postgres `jobs` table (claim with `FOR UPDATE SKIP LOCKED`).
-  Order per chapter: upload audio, then timings, verify, mark `ready`, then Telegram, then wipe temp.
+  Order per chapter: copy audio and timings to the library folder, upload both to Telegram (a hard gate),
+  record the `file_id`s and mark `ready`, then wipe temp.
 - Chapter numbers are 1-based and never renumbered once published (numbering guard + `--accept-renumber`).
 - No views, no always-on server, no persistent sentence cache.
 
@@ -44,10 +60,11 @@ rework research). Approved by the captain on 2026-10-02 ("looks good").
 
 ## Repo, tooling, CI
 - One public repo `locodafux/audiobook`: `app/`, `generator/`, `supabase/`, `scripts/`, `docs/`.
-- uv + ruff + pytest (generator); TypeScript + eslint + jest (app); deno test (function);
+- uv + ruff + pytest (generator); TypeScript + eslint + jest (app); deno test (functions);
   `supabase db reset` + `supabase test db` (database); gitleaks as pre-commit hook and in CI.
-- Secrets: Mac-only `.env.dev` / `.env.prod`; R2 read key as function secret; app holds only
-  the Supabase URL and anon key. No key from the old Supabase project is reused.
+- Secrets: Mac-only `.env.dev` / `.env.prod`; the `download-links` function's `TELEGRAM_BOT_TOKEN` is a Supabase
+  function secret; the app holds only the Supabase URL and anon key (the token reaches phones only inside
+  download links, see above). No key from the old Supabase project is reused.
 - Release: signed arm64 APK built locally, uploaded to a rolling GitHub release `latest`; the
   app checks it and shows an update banner. Keep-alive: GitHub workflow pings `ping()` every 3 days.
 - Public repo hygiene: no book text or audio ever committed; site-specific watermark rules live
@@ -67,6 +84,6 @@ rework research). Approved by the captain on 2026-10-02 ("looks good").
 - Swipe-left row actions on storage, queue and bookmark rows.
 
 ## Build order
-0 accounts and empty home, 1 tables/rules/invites, 2 generator (one book, dev), 3 link function
-and Telegram backup, 4 app shell (sign-in, library), 5 download and offline player, 6 remaining
+0 accounts and empty home, 1 tables/rules/invites, 2 generator (one book, dev), 3 Telegram store
+and download links, 4 app shell (sign-in, library), 5 download and offline player, 6 remaining
 screens, 7 release and keep-alive, 8 real library and friends.

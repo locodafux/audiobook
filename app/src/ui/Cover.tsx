@@ -5,8 +5,7 @@ import type { BookRow } from '../data/types';
 import { fonts, gradientFor } from '../theme';
 
 /**
- * A book cover. Real covers are R2 files that arrive through the link function
- * (phase 5); until a `uri` is given, every book shows its gradient fallback.
+ * A book cover. Real covers are not served yet; until a `uri` is given, every book shows its gradient fallback.
  */
 export function Cover({
   book,

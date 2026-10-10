@@ -1,4 +1,4 @@
-"""One chapter job (plan section 6): fetch EPUB, speak, join, upload, verify, ready, back up, wipe."""
+"""One chapter job: read the EPUB, speak, join, keep a local copy, upload to Telegram, ready, wipe temp."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 from . import audio, jobs
 from .book import Book, chapter_keys, input_hash, source_key, text_sha256
 from .deps import Deps
-from .telegram import TelegramError
+from .telegram import Sent, TelegramError
 
 log = logging.getLogger("hearthread")
 
@@ -95,7 +95,7 @@ async def chapter_job(deps: Deps, job: jobs.Job, cache: BookCache) -> None:
         )
         if a and t and a["size"] == ch["bytes"]:
             log.info("%s ch %d already ready, skipping", book_id, n)
-            if ch["backup_status"] != "done":
+            if ch["backup_status"] != "done" or not ch["telegram_audio_file_id"]:
                 await asyncio.to_thread(jobs.enqueue, db, book_id, n, "backup")
             return
 
@@ -125,6 +125,14 @@ async def chapter_job(deps: Deps, job: jobs.Job, cache: BookCache) -> None:
         sha = await asyncio.to_thread(deps.store.put_file, audio_key, mp3, "audio/mpeg")
         await asyncio.to_thread(deps.store.put_file, timing_key, timing, "application/json")
 
+        # Telegram is where phones download from, so a chapter is not ready until it is there.
+        try:
+            audio_sent, timing_sent = await send_chapter(deps, book_id, n, ch["title"], mp3, timing)
+        except TelegramError as exc:
+            if exc.permanent:
+                raise PermanentError(str(exc)) from exc
+            raise
+
         await asyncio.to_thread(
             mark_ready,
             deps,
@@ -138,20 +146,10 @@ async def chapter_job(deps: Deps, job: jobs.Job, cache: BookCache) -> None:
                 audio_key=audio_key,
                 timing_key=timing_key,
                 input_hash=ihash,
+                **telegram_fields(audio_sent, timing_sent),
             ),
         )
         log.info("%s ch %d ready (%.0fs)", book_id, n, duration)
-
-        try:  # a Telegram failure never un-readies the chapter
-            await send_backup(deps, book_id, n, ch["title"], mp3, timing)
-        except (TelegramError, OSError) as exc:
-            log.warning("%s ch %d backup failed: %s", book_id, n, exc)
-            await asyncio.to_thread(
-                db.x,
-                "UPDATE chapters SET backup_status = 'failed' WHERE book_id = %s AND n = %s",
-                (book_id, n),
-            )
-            await asyncio.to_thread(jobs.enqueue, db, book_id, n, "backup", 60)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -163,7 +161,13 @@ def mark_ready(deps: Deps, book_id: str, n: int, f: dict[str, Any]) -> None:
             """UPDATE chapters SET status = 'ready', duration_s = %(duration_s)s, bytes = %(bytes)s,
                    sentence_count = %(sentence_count)s, audio_sha256 = %(audio_sha256)s,
                    audio_key = %(audio_key)s, timing_key = %(timing_key)s, input_hash = %(input_hash)s,
-                   backup_status = 'none', telegram_audio_msg = NULL, telegram_timing_msg = NULL
+                   backup_status = 'done',
+                   telegram_audio_msg = %(telegram_audio_msg)s,
+                   telegram_timing_msg = %(telegram_timing_msg)s,
+                   telegram_audio_file_id = %(telegram_audio_file_id)s,
+                   telegram_audio_file_unique_id = %(telegram_audio_file_unique_id)s,
+                   telegram_timing_file_id = %(telegram_timing_file_id)s,
+                   telegram_timing_file_unique_id = %(telegram_timing_file_unique_id)s
                WHERE book_id = %(b)s AND n = %(n)s""",
             {**f, "b": book_id, "n": n},
         )
@@ -188,23 +192,49 @@ def refresh_totals(conn: Any, book_id: str) -> None:
     )
 
 
-async def send_backup(
+async def send_chapter(
     deps: Deps, book_id: str, n: int, title: str, mp3: Path, timing: Path
-) -> None:
+) -> tuple[Sent, Sent]:
     """Send audio then timings to Telegram; raises TelegramError on failure."""
     label = f"{book_id} ch {n:04d} {title}"
     a = await deps.backup.send_document(mp3, label)
     t = await deps.backup.send_document(timing, label + " (timings)")
+    return a, t
+
+
+def telegram_fields(audio: Sent, timing: Sent) -> dict[str, Any]:
+    """The chapters-table columns that say where Telegram holds the two files."""
+    return dict(
+        telegram_audio_msg=audio.message_id,
+        telegram_timing_msg=timing.message_id,
+        telegram_audio_file_id=audio.file_id,
+        telegram_audio_file_unique_id=audio.file_unique_id,
+        telegram_timing_file_id=timing.file_id,
+        telegram_timing_file_unique_id=timing.file_unique_id,
+    )
+
+
+async def send_backup(
+    deps: Deps, book_id: str, n: int, title: str, mp3: Path, timing: Path
+) -> None:
+    """Upload again and record the new file ids (the chapter stays ready and listenable)."""
+    a, t = await send_chapter(deps, book_id, n, title, mp3, timing)
     await asyncio.to_thread(
         deps.db.x,
-        """UPDATE chapters SET backup_status = 'done', telegram_audio_msg = %s, telegram_timing_msg = %s
-           WHERE book_id = %s AND n = %s""",
-        (a, t, book_id, n),
+        """UPDATE chapters SET backup_status = 'done',
+               telegram_audio_msg = %(telegram_audio_msg)s,
+               telegram_timing_msg = %(telegram_timing_msg)s,
+               telegram_audio_file_id = %(telegram_audio_file_id)s,
+               telegram_audio_file_unique_id = %(telegram_audio_file_unique_id)s,
+               telegram_timing_file_id = %(telegram_timing_file_id)s,
+               telegram_timing_file_unique_id = %(telegram_timing_file_unique_id)s
+           WHERE book_id = %(b)s AND n = %(n)s""",
+        {**telegram_fields(a, t), "b": book_id, "n": n},
     )
 
 
 async def backup_job(deps: Deps, job: jobs.Job) -> None:
-    """Re-send a chapter's Telegram backup, taken from R2."""
+    """Upload a chapter to Telegram again, taken from the library folder."""
     book_id, n = job["book_id"], job["chapter_n"]
     ch = await asyncio.to_thread(
         deps.db.one, "SELECT * FROM chapters WHERE book_id = %s AND n = %s", (book_id, n)

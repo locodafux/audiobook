@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** One chapter's short-lived pass to R2, from the `download-links` function (tech plan section 5). */
+/** One chapter's short-lived Telegram link, from the `download-links` function (tech plan section 5). */
 export type ChapterLink = {
   n: number;
   audioUrl: string;

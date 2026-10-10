@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 
 import httpx
@@ -14,17 +15,13 @@ from hearthread.book import chapter_keys, input_hash, parse_range, slugify, text
 from hearthread.cli import make_parser
 from hearthread.library import _renumber_changes
 from hearthread.settings import ConfigError, Settings, load_env, parse_env_file
-from hearthread.telegram import Telegram, TelegramError
+from hearthread.telegram import Sent, Telegram, TelegramError
 from hearthread.voice import EdgeVoice
 
 ENV = {
     "SUPABASE_URL": "http://x/",
     "SUPABASE_DB_URL": "postgresql://x",
     "SUPABASE_SERVICE_KEY": "k",
-    "R2_ACCOUNT_ID": "a",
-    "R2_BUCKET": "b",
-    "R2_WRITE_KEY_ID": "i",
-    "R2_WRITE_SECRET": "s",
     "TELEGRAM_BOT_TOKEN": "t",
     "TELEGRAM_BACKUP_CHAT_ID": "c",
 }
@@ -38,17 +35,17 @@ def test_default_narration_is_normal_speed():
 
 def test_missing_settings_are_named_without_values():
     with pytest.raises(ConfigError) as e:
-        Settings.from_env({"SUPABASE_URL": "secret-value"})
-    assert "R2_BUCKET" in str(e.value) and "secret-value" not in str(e.value)
+        Settings.from_env({"TELEGRAM_BOT_TOKEN": "secret-value"})
+    assert "SUPABASE_DB_URL" in str(e.value) and "secret-value" not in str(e.value)
 
 
 def test_env_file_dev_prod_and_environment_override(tmp_path, monkeypatch):
-    (tmp_path / ".env.dev").write_text('# c\nR2_BUCKET="dev-bucket"\nexport TTS_RATE=+10%\n')
-    (tmp_path / ".env.prod").write_text("R2_BUCKET=prod-bucket\n")
-    assert load_env(False, tmp_path)["R2_BUCKET"] == "dev-bucket"
-    assert load_env(True, tmp_path)["R2_BUCKET"] == "prod-bucket"
-    monkeypatch.setenv("R2_BUCKET", "from-env")
-    assert load_env(False, tmp_path)["R2_BUCKET"] == "from-env"
+    (tmp_path / ".env.dev").write_text('# c\nSUPABASE_URL="dev-url"\nexport TTS_RATE=+10%\n')
+    (tmp_path / ".env.prod").write_text("SUPABASE_URL=prod-url\n")
+    assert load_env(False, tmp_path)["SUPABASE_URL"] == "dev-url"
+    assert load_env(True, tmp_path)["SUPABASE_URL"] == "prod-url"
+    monkeypatch.setenv("SUPABASE_URL", "from-env")
+    assert load_env(False, tmp_path)["SUPABASE_URL"] == "from-env"
     assert parse_env_file(tmp_path / ".env.dev")["TTS_RATE"] == "+10%"
 
 
@@ -177,11 +174,12 @@ def test_telegram_honours_retry_after_and_rate_limit(tmp_path):
                     "parameters": {"retry_after": 7},
                 },
             )
-        return httpx.Response(200, json={"ok": True, "result": {"message_id": 42}})
+        doc = {"file_id": "FID", "file_unique_id": "UID"}
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 42, "document": doc}})
 
     sleeps: list[float] = []
     tg = _tg(handler, sleeps)
-    assert asyncio.run(tg.send_document(f, "c")) == 42
+    assert asyncio.run(tg.send_document(f, "c")) == Sent(42, "FID", "UID")
     assert 7 in sleeps  # waited exactly what Telegram asked
     assert len(calls) == 2
 
@@ -221,10 +219,10 @@ def test_telegram_gives_up_after_retries(tmp_path):
     assert len(n) == 3
 
 
-def test_telegram_refuses_over_50mb(tmp_path, monkeypatch):
+def test_telegram_refuses_what_a_bot_could_not_download_again(tmp_path, monkeypatch):
     f = tmp_path / "big.mp3"
     f.write_bytes(b"x")
-    monkeypatch.setattr("hearthread.telegram.BOT_UPLOAD_LIMIT", 0)
+    monkeypatch.setattr("hearthread.telegram.BOT_FILE_LIMIT", 0)
     with pytest.raises(TelegramError) as e:
         asyncio.run(_tg(lambda r: httpx.Response(200), []).send_document(f, "c"))
     assert e.value.permanent
@@ -253,3 +251,27 @@ def test_default_parser_adapts_the_real_epub_reader(monkeypatch, tmp_path):
     )
     assert b.chapters[0].sentences == ["a.", "b."] and b.chapters[0].source_ref == "x.xhtml#c1"
     assert b.chapters[1].error == "boom"
+
+
+def test_library_folder_stores_verifies_and_stays_inside_itself(tmp_path):
+    from hearthread.store import LocalStore
+
+    root = tmp_path / "lib"
+    st = LocalStore(root)
+    st.check()
+    src = tmp_path / "a.bin"
+    src.write_bytes(b"abc")
+    sha = st.put_file("books/b/ch-0001.mp3", src, "audio/mpeg")
+    assert sha == hashlib.sha256(b"abc").hexdigest()
+    assert st.head("books/b/ch-0001.mp3") == {"size": 3, "sha256": None}
+    assert st.head("books/b/nope") is None
+    st.put_bytes("books/b/cover.jpg", b"jpg", "image/jpeg")
+    out = tmp_path / "out"
+    st.get_file("books/b/ch-0001.mp3", out)
+    assert out.read_bytes() == b"abc"
+    assert not list(root.rglob("*.part"))  # copies are atomic
+    assert st.delete_prefix("books/b/ch-0001.") == 1  # one chapter's files, not its neighbours
+    assert st.head("books/b/cover.jpg")
+    assert st.delete_prefix("books/b/") == 1 and st.head("books/b/cover.jpg") is None
+    with pytest.raises(ValueError):
+        st.put_bytes("../escape", b"x", "x")

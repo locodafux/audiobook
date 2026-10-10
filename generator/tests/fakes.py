@@ -1,4 +1,4 @@
-"""In-memory stand-ins for voice, R2, Telegram and the EPUB parser. No network, no real audio."""
+"""In-memory stand-ins for voice, library folder, Telegram and the EPUB parser. No network, no real audio."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 
 from hearthread.book import Book, Chapter
 from hearthread.settings import Settings
-from hearthread.telegram import TelegramError
+from hearthread.telegram import Sent, TelegramError
 
 # `supabase start` default. Tests refuse to touch anything that is not a local database.
 LOCAL_DB = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
@@ -26,10 +26,6 @@ def mk_settings(**over) -> Settings:
         supabase_url="http://127.0.0.1:54321",
         db_url=LOCAL_DB,
         service_key="k",
-        r2_account_id="a",
-        r2_bucket="b",
-        r2_key_id="i",
-        r2_secret="s",
         telegram_token="t",
         telegram_chat_id="c",
         tts_chapter_concurrency=4,
@@ -114,12 +110,13 @@ class FakeBackup:
     async def check(self) -> str:
         return "fake"
 
-    async def send_document(self, path: Path, caption: str) -> int:
+    async def send_document(self, path: Path, caption: str) -> Sent:
         if self.fail_times > 0:
             self.fail_times -= 1
             raise TelegramError("network down", permanent=self.permanent)
         self.sent.append((path.name, caption))
-        return 1000 + len(self.sent)
+        n = len(self.sent)
+        return Sent(1000 + n, f"file-id-{n}", f"unique-{n}")
 
 
 def make_book(n_chapters: int = 3, sentences: int = 4, title: str = "Made Up Tale") -> Book:

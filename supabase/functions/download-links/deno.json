@@ -1,6 +1,5 @@
 {
   "imports": {
-    "aws4fetch": "npm:aws4fetch@1.0.20",
     "@std/assert": "jsr:@std/assert@1"
   },
   "fmt": { "lineWidth": 100 }
