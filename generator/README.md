@@ -34,6 +34,11 @@ recorded. `--private-to` (a username, or an email) makes the book visible to tha
 Run it again after an interruption: finished chapters are skipped. `--limit 3` is a cheap first try.
 The book only appears once every chapter is in. Run it once per volume.
 
+**Covers.** `add` keeps the EPUB's cover in the library folder and sends it to Telegram; phones fetch it through
+`download-links`. For a book that has none (such as an imported one) or a better picture:
+`uv run hearthread --prod cover shadow-slave-01 /path/to/picture.jpg` (any size; it is shrunk to a 600 px JPEG).
+Without a picture path it re-sends the library folder's copy. Do not commit cover art.
+
 Everything defaults to **dev**. Real data needs `--prod`.
 
 Tests (`uv run pytest`) use fakes for voice, Telegram and the EPUB parser, so nothing touches the

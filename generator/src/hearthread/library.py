@@ -1,4 +1,4 @@
-"""The book-level commands: add, status, retry, cancel, publish, regen, backup-retry, remove."""
+"""The book-level commands: add, cover, status, retry, cancel, publish, regen, backup-retry, remove."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from .book import (
     text_sha256,
 )
 from .deps import Deps
+from .epub.parser import shrink_cover
 from .pipeline import fetch_and_parse, refresh_totals
 from .store import sha256_file
 from .telegram import Sent, TelegramError
@@ -149,6 +150,46 @@ def _telegram_extras(deps: Deps, book_id: str, epub: Path, cover: bytes | None, 
     except (TelegramError, OSError) as exc:
         say(f"warning: Telegram copy of the EPUB/cover failed ({exc}); continuing")
         return None
+
+
+def set_cover(
+    deps: Deps, book_id: str, image: Path | None = None, say: Callable[[str], None] = print
+) -> None:
+    """Make `image` (default: the book's copy in the library folder) the book's cover.
+
+    Shrunk to a 600 px JPEG, kept in the library folder and sent to Telegram; phones fetch it through
+    `download-links`. Unlike `add`, a Telegram failure is an error here: it is the whole point."""
+    _get_book(deps, book_id)
+    if image is None:
+        tmp = deps.tmp_base / f"cover-{book_id}"
+        tmp.mkdir(parents=True, exist_ok=True)
+        try:
+            if not deps.store.head(cover_key(book_id)):
+                raise CommandError(f"no cover in the library folder for {book_id!r}; pass an image")
+            deps.store.get_file(cover_key(book_id), tmp / "in")
+            data = (tmp / "in").read_bytes()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    elif image.is_file():
+        data = image.read_bytes()
+    else:
+        raise CommandError(f"{image} is not a file")
+    try:
+        jpeg = shrink_cover(data)
+    except Exception as exc:  # noqa: BLE001 - any decoder failure should read as a message
+        raise CommandError(f"that is not an image I can read: {exc}") from exc
+    deps.store.put_bytes(cover_key(book_id), jpeg, "image/jpeg")
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / f"{book_id}-cover.jpg"
+        p.write_bytes(jpeg)
+        try:
+            sent = asyncio.run(deps.backup.send_document(p, f"{book_id} cover"))
+        except TelegramError as exc:
+            raise CommandError(f"Telegram refused the cover: {exc}") from exc
+    deps.db.x("UPDATE books SET cover_file_id = %s WHERE id = %s", (sent.file_id, book_id))
+    say(
+        f"cover set for {book_id!r} ({len(jpeg) // 1024} KB); phones pick it up on their next visit"
+    )
 
 
 # --- status -----------------------------------------------------------------------------------

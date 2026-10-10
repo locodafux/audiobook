@@ -275,3 +275,89 @@ def test_library_folder_stores_verifies_and_stays_inside_itself(tmp_path):
     assert st.delete_prefix("books/b/") == 1 and st.head("books/b/cover.jpg") is None
     with pytest.raises(ValueError):
         st.put_bytes("../escape", b"x", "x")
+
+
+# --- cover command (a stub database, so no Supabase needed) ------------------------------------
+
+
+class _OneBookDb:
+    def __init__(self) -> None:
+        self.cover_file_id: str | None = None
+
+    def one(self, sql, params=None):
+        return {"id": params[0], "title": "Made Up Tale"} if params[0] == "tale" else None
+
+    def x(self, sql, params=None):
+        assert "UPDATE books SET cover_file_id" in sql
+        self.cover_file_id = params[0]
+        return 1
+
+
+def _cover_deps(tmp_path):
+    from fakes import FakeBackup, FakeStore, mk_settings
+    from hearthread.deps import Deps
+
+    return Deps(
+        settings=mk_settings(), db=_OneBookDb(), store=FakeStore(), backup=FakeBackup(),
+        voice=None, tmp_base=tmp_path / "tmp", state_dir=tmp_path,
+    )  # fmt: skip
+
+
+def _png(path, size=(1200, 1800)):
+    from PIL import Image
+
+    Image.new("RGB", size, "teal").save(path)
+    return path
+
+
+def test_cover_command_shrinks_stores_uploads_and_records_the_file_id(tmp_path):
+    import io
+
+    from PIL import Image
+
+    from hearthread import library
+
+    deps = _cover_deps(tmp_path)
+    msgs: list[str] = []
+    library.set_cover(deps, "tale", _png(tmp_path / "c.png"), msgs.append)
+    stored, kind = deps.store.objects["books/tale/cover.jpg"]
+    assert kind == "image/jpeg" and Image.open(io.BytesIO(stored)).size == (400, 600)
+    assert deps.backup.sent == [("tale-cover.jpg", "tale cover")]
+    assert deps.db.cover_file_id == "file-id-1" and "cover set" in msgs[0]
+
+
+def test_cover_command_without_an_image_reuses_the_library_folder_copy(tmp_path):
+    from hearthread import library
+
+    deps = _cover_deps(tmp_path)
+    with pytest.raises(library.CommandError, match="pass an image"):
+        library.set_cover(deps, "tale", None, lambda m: None)
+    big = _png(tmp_path / "c.png")
+    deps.store.put_bytes("books/tale/cover.jpg", big.read_bytes(), "image/jpeg")
+    library.set_cover(deps, "tale", None, lambda m: None)
+    assert deps.db.cover_file_id == "file-id-1"
+
+
+def test_cover_command_refuses_unknown_books_bad_images_and_a_telegram_failure(tmp_path):
+    from fakes import FakeBackup
+    from hearthread import library
+
+    deps = _cover_deps(tmp_path)
+    with pytest.raises(library.CommandError, match="no book"):
+        library.set_cover(deps, "nope", _png(tmp_path / "c.png"), lambda m: None)
+    junk = tmp_path / "junk.png"
+    junk.write_bytes(b"not an image")
+    with pytest.raises(library.CommandError, match="not an image"):
+        library.set_cover(deps, "tale", junk, lambda m: None)
+    with pytest.raises(library.CommandError, match="is not a file"):
+        library.set_cover(deps, "tale", tmp_path / "missing.png", lambda m: None)
+    deps.backup = FakeBackup(fail_times=1, permanent=True)
+    with pytest.raises(library.CommandError, match="Telegram refused"):
+        library.set_cover(deps, "tale", _png(tmp_path / "c.png"), lambda m: None)
+    assert deps.db.cover_file_id is None
+
+
+def test_cover_is_a_command():
+    args = make_parser().parse_args(["cover", "tale", "pic.png"])
+    assert (args.cmd, args.book, str(args.image)) == ("cover", "tale", "pic.png")
+    assert make_parser().parse_args(["cover", "tale"]).image is None

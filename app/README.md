@@ -17,6 +17,8 @@ settings (`src/settings`, includes `speedFor(settings, bookId)` and `smartRewind
 The Downloads and storage screens talk to the download/storage worker through the interfaces in `src/storage/ports.ts` (`Shell` takes `ports`; `stubPorts` shows empty states until they are wired).
 Theme and accent are applied at startup (`src/Root.tsx`) and again whenever they change (`useAppearance` in `src/settings/appearance.ts`): styles that use `colors` are built with `themedStyles` (`src/theme.ts`) so they are rebuilt, and the screens remount, with the new colours.
 
+Covers (`src/data/covers.ts`): `Cover` shows the book's picture when the phone has it and its gradient otherwise. A missing picture is requested from `download-links` (`{ book_ids }`, batched, once per install) and kept as `hearthread/covers/<book>.jpg`, so it also shows offline.
+
 ## Player and downloads
 
 Chapters are played from files on the phone (private app storage, `hearthread/books/<book>/ch-0001.mp3` plus `.json` timing). Native pieces sit behind small interfaces (`PlayerEngine`, `FileStore`, `NetworkWatcher`) so the queue, storage, position saving, smart rewind, sleep timer and timing lookup are tested with in-memory fakes. The real expo-audio / expo-file-system / expo-network adapters are only imported from `src/services.ts`, which also builds the `PhonePorts` the Downloads screen uses (`src/storage/phonePorts.ts`).

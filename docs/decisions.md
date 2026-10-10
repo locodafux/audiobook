@@ -16,7 +16,10 @@ rework research). Approved by the captain on 2026-10-02 ("looks good").
 ## Architecture
 - Audio and timing files: stored in **Telegram** (the old app's bot and a private chat). The Mac also keeps
   every file in a local library folder, which is the real backup (Telegram may delete files). No
-  Cloudflare account is needed. Covers: not served yet (the app draws its gradient).
+  Cloudflare account is needed.
+- **Covers** are stored the same way (a 600 px JPEG in Telegram, `books.cover_file_id`) and served through the
+  same `download-links` function (`{ book_ids }`). The phone fetches each one once into its own storage, so
+  covers show offline; a book with no cover keeps its gradient. `hearthread cover <book> [image]` sets one.
 - Catalog and access: **Supabase** Postgres, four tables: `members`, `books`, `chapters`, `jobs`.
   No views; safe columns are exposed with column-level grants. Sentence text is not in the
   database (it is in the timing file).

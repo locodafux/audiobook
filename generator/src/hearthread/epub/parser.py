@@ -206,6 +206,21 @@ def _series(book: epub.EpubBook) -> tuple[str | None, int | None]:
 # --- cover ------------------------------------------------------------------------------
 
 
+def shrink_cover(data: bytes) -> bytes:
+    """Any readable image as a JPEG with its longest side at most 600 px. Raises when it is not an image."""
+    image = Image.open(io.BytesIO(data))
+    image.load()
+    if image.mode in ("RGBA", "LA", "P"):  # flatten transparency onto white
+        image = image.convert("RGBA")
+        flat = Image.new("RGBA", image.size, "white")
+        image = Image.alpha_composite(flat, image)
+    image = image.convert("RGB")
+    image.thumbnail((COVER_MAX_PX, COVER_MAX_PX), Image.Resampling.LANCZOS)
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=COVER_JPEG_QUALITY)
+    return out.getvalue()
+
+
 def _cover(book: epub.EpubBook) -> bytes | None:
     """The declared cover, else an image named "cover"; never a guess at some other image."""
     items = list(book.get_items_of_type(ebooklib.ITEM_COVER))
@@ -214,17 +229,7 @@ def _cover(book: epub.EpubBook) -> bytes | None:
     ]
     for item in items:
         try:
-            image = Image.open(io.BytesIO(item.get_content()))
-            image.load()
-            if image.mode in ("RGBA", "LA", "P"):  # flatten transparency onto white
-                image = image.convert("RGBA")
-                flat = Image.new("RGBA", image.size, "white")
-                image = Image.alpha_composite(flat, image)
-            image = image.convert("RGB")
-            image.thumbnail((COVER_MAX_PX, COVER_MAX_PX), Image.Resampling.LANCZOS)
-            out = io.BytesIO()
-            image.save(out, format="JPEG", quality=COVER_JPEG_QUALITY)
-            return out.getvalue()
+            return shrink_cover(item.get_content())
         except Exception:  # unreadable image: try the next candidate, else no cover
             continue
     return None

@@ -1,16 +1,19 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image, StyleSheet, Text, View, type DimensionValue } from 'react-native';
 
+import { useCoverUri } from '../data/covers';
 import type { BookRow } from '../data/types';
+import { useServices } from '../servicesContext';
 import { fonts, gradientFor } from '../theme';
 
 /**
- * A book cover. Real covers are not served yet; until a `uri` is given, every book shows its gradient fallback.
+ * A book cover: the real picture once the phone has it (fetched through download-links, see data/covers.ts),
+ * the book's gradient until then and for books without one. A `uri` prop overrides the lookup.
  */
 export function Cover({
   book,
   width,
-  uri,
+  uri: given,
   showTitle = true,
 }: {
   book: Pick<BookRow, 'id' | 'title'>;
@@ -18,6 +21,8 @@ export function Cover({
   uri?: string;
   showTitle?: boolean;
 }) {
+  const stored = useCoverUri(useServices()?.covers, book.id);
+  const uri = given ?? stored;
   const initial = book.title.replace(/^(the|a|an)\s+/i, '')[0]?.toUpperCase() ?? '?';
   return (
     <View style={[styles.frame, { width }]} accessibilityIgnoresInvertColors>
