@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 
 import type { BookmarksStore } from './bookmarks/bookmarks';
+import type { CoverStore } from './data/covers';
 import type { DownloadQueue } from './downloads/queue';
 import type { DownloadStore } from './downloads/store';
 import type { PlayerController } from './player/controller';
@@ -18,6 +19,8 @@ export type Services = {
   player: PlayerController;
   /** The Downloads and storage screens' view of the queue and files. */
   ports: PhonePorts;
+  /** Book cover pictures kept on the phone. */
+  covers: CoverStore;
 };
 
 const ServicesContext = createContext<Services | null>(null);

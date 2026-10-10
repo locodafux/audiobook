@@ -109,6 +109,12 @@ def make_parser() -> argparse.ArgumentParser:
         yes,
     )
     cmd(
+        "cover",
+        "set a book's cover picture (default: the one from its EPUB, kept in the library folder)",
+        book,
+        (("image",), {"type": Path, "nargs": "?", "help": "a picture file (any size, shrunk)"}),
+    )
+    cmd(
         "run",
         "the worker (one per Mac)",
         (("--once",), {"action": "store_true", "help": "exit when the list is empty"}),
@@ -178,6 +184,8 @@ def dispatch(args: argparse.Namespace, deps: Deps, confirm: Callable[[str], bool
     c = args.cmd
     if c == "add":
         library.add(deps, args.epub, args.id, ask)
+    elif c == "cover":
+        library.set_cover(deps, args.book, args.image)
     elif c == "run":
         try:
             with worker_lock(deps.state_dir):

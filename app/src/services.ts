@@ -5,6 +5,7 @@ import { keepNextChapters } from './downloads/autoDownload';
 import { cleanUpOld } from './downloads/cleanup';
 import { createExpoFiles } from './downloads/expoFiles';
 import { createExpoNetwork } from './downloads/expoNetwork';
+import { createCoverStore, supabaseCoverLinks } from './data/covers';
 import { readSavedBookList } from './data/offlineList';
 import type { BookRow, ChapterRow } from './data/types';
 import { supabaseLinks } from './downloads/links';
@@ -40,5 +41,6 @@ export async function createServices(client: SupabaseClient, phone: Phone): Prom
   await queue.load();
   const counts = new Map((await readSavedBookList(AsyncStorage))?.books.map((b) => [b.id, b.chapter_count]));
   const ports = createPhonePorts({ downloaded, positions, queue, player, files, totalChapters: (id) => counts.get(id) });
-  return { settings, bookmarks, positions, downloaded, queue, player, ports };
+  const covers = createCoverStore({ files, api: supabaseCoverLinks(client) });
+  return { settings, bookmarks, positions, downloaded, queue, player, ports, covers };
 }

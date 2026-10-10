@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { Shell } from '../Shell';
+import { ServicesProvider, type Services } from '../servicesContext';
+import { Cover } from '../ui/Cover';
 
 import { AuthFlowError, type AuthApi } from '../auth/authApi';
 import { createSignInController } from '../auth/signInController';
@@ -70,6 +72,33 @@ describe('Home', () => {
     const state: BookListState = { status: 'ready', refreshing: false, list: { books: [], source: 'network', fetchedAt: 0 } };
     await render(<HomeScreen username="abc" books={{ state, refresh: jest.fn() }} onOpen={jest.fn()} />);
     expect(screen.getByText('Nothing here yet')).toBeTruthy();
+  });
+});
+
+describe('Cover', () => {
+  const store = (uri: string | undefined, want = jest.fn()) =>
+    ({ covers: { uri: () => uri, want, subscribe: () => () => {} } }) as unknown as Services;
+
+  it('shows the picture the phone has, without the gradient title', async () => {
+    const want = jest.fn();
+    await render(
+      <ServicesProvider value={store('file:///fake/covers/small.jpg', want)}>
+        <Cover book={{ id: 'small', title: 'Small Habits' }} width={100} />
+      </ServicesProvider>,
+    );
+    expect(screen.queryByText('Small Habits')).toBeNull();
+    expect(want).not.toHaveBeenCalled();
+  });
+
+  it('draws the gradient and asks for the picture while the phone has none', async () => {
+    const want = jest.fn();
+    await render(
+      <ServicesProvider value={store(undefined, want)}>
+        <Cover book={{ id: 'small', title: 'Small Habits' }} width={100} />
+      </ServicesProvider>,
+    );
+    expect(screen.getByText('Small Habits')).toBeTruthy();
+    expect(want).toHaveBeenCalledWith('small');
   });
 });
 
